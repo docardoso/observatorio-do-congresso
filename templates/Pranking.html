@@ -63,16 +63,11 @@
 		<div class="Container mt-3">
 			<table id="Fancy", class="Display", style="width: 100%">
 				<thead>
-                    <tt class="row">Ranking das Votações</tt>
+                    <tt class="row">Ranking dos Parlamentares</tt>
 					<tr>
-						<th>Id Votação</th>
+						<th>Nome</th>
                         <th>(%) Assertividade</th>
-                        <th>Nº Votos Sim</th>
-                        <th>Nº Votos Não</th>
-                        <th>Nº Abstenções</th>
-                        <th>Entropia</th>
-                        <th>(%) Competitividade</th>
-                        <th>Mais votado-2º Mais votado</th>
+                        <th>Total de votos</th>
 
 					</tr>
 				</thead>
@@ -80,13 +75,8 @@
 					{% for elemento in ast %}
 					<tr>
 						<td>{{ elemento[0] }}</td>
-                        <td>{{ elemento[4] }}</td>
                         <td>{{ elemento[1] }}</td>
                         <td>{{ elemento[2] }}</td>
-                        <td>{{ elemento[3] }}</td>
-                        <td>{{ elemento[7] }}</td>
-                        <td>{{ elemento[5] }}</td>
-                        <td>{{ elemento[6] }}</td>
 					</tr>
 					{% endfor %}
 				</tbody>

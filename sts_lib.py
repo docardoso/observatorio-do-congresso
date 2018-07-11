@@ -11,16 +11,6 @@ data_atual = time.localtime()[0:3]
 global_keys = dict()
 global_keys['DATA_INICIO'] = '2010-02-24'
 global_keys['DATA_FIM'] = '{}-{}-{}'.format(data_atual[0], data_atual[1], data_atual[2])
-global_keys['SQL_VOTACAO_SORT'] = '''
-	SELECT id_votacao
-	FROM votacao
-	WHERE date(dataHoraInicio) >= '{}'
-	AND date(dataHoraInicio) <= '{}';
-'''
-global_keys['SQL_PARLAMENTAR_SORT'] = '''
-	SELECT id_parlamentar
-	FROM parlamentar
-'''
 
 # Funções auxiliares
 def converte_data(data_string):
@@ -47,6 +37,7 @@ def converte_id_votacao(id_votacao):
 
 	except TypeError:
 		return id_votacao
+
 
 # Funções Relacionadas às votações
 def votacoes_periodo(passo = 'D', data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
@@ -143,54 +134,76 @@ def materias_periodo(passo = 'D', data_in = global_keys['DATA_INICIO'], data_fim
 		return res
 
 # Funções relacionadas aos parlamentares
-def assertividade_parlamentar(id_parlamentar, data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
-	""" Calcula a assertividade de um parlamentar em um período de tempo
-	Assertividade é da pela quantidade de votos na descrição mais votada pelo parlamentar / total de votos do parlamentar"""
+def assertividade_parlamentar(data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
+	""" Calcula a assertividade dos parlamentares em um período de tempo
+	Assertividade é da pela quantidade de votos na descrição mais votada pelo parlamentar / total de votos do parlamentar
+	O calculo só é realizado com totais de votos superiores a 40 votos, e só leva em conta votações nominais"""
 	conn = sql.connect("py_politica.db")
 	cursor = conn.cursor()
+	parlamentares = dict()
 	sql_command = '''
-		SELECT count(*) as qtd 
+		SELECT nome, count(*) as qtd 
 		FROM parlamentar NATURAL JOIN voto
 		WHERE id_votacao in 
 			(SELECT id_votacao 
 			FROM votacao 
 			WHERE date(dataHoraInicio)>='{}' and date(dataHoraInicio)<='{}') 
-			and id_parlamentar = {}
 			and descricao != 'Votou'
-		GROUP BY descricao;
+		GROUP BY id_parlamentar, descricao;
 	'''
-	qtd = cursor.execute(sql_command.format(data_in, data_fim, id_parlamentar)).fetchall()
-	qtd = [x[0] for x in qtd]
-	total = sum(qtd)
-	if total >= 40:
-		maximo = max(qtd)
-		assertividade = (maximo/total)*100
-		conn.close()
-		return assertividade
+ 
+	res = cursor.execute(sql_command.format(data_in, data_fim)).fetchall()
+	for parlamentar in res:
+		if parlamentar[0] in parlamentares.keys():
+			parlamentares[parlamentar[0]].append(parlamentar[1])
 
-def numero_votos(id_parlamentar, data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
-	""" Calcula o Número de Votos dado uma faixa de tempo """
+		else:
+			parlamentares[parlamentar[0]] = [parlamentar[1]]
+
+	for parlamentar in parlamentares.keys():
+		total = sum(parlamentares[parlamentar])
+		if total >= 40:
+			maximo = max(parlamentares[parlamentar])
+			assertividade = "%.2f" %((maximo/total)*100)
+		
+		else:
+			assertividade = 'NA'
+		
+		parlamentares[parlamentar] = assertividade
+
+	sql_command = '''
+		SELECT nome 
+		FROM parlamentar'''
+
+	res = cursor.execute(sql_command).fetchall()
+	for parlamentar in res:
+		if parlamentar[0] not in parlamentares.keys():
+			parlamentares[parlamentar[0]] = 'NA'
+
+	conn.close()
+	return parlamentares
+
+def numero_votos(data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
+	""" Calcula o Número de Votos dos parlamentares dado uma faixa de tempo """
 	conn = sql.connect("py_politica.db")
 	cursor = conn.cursor()
+	parlamentares = dict()
 	sql_command = '''
-		SELECT count(*) as qtd 
+		SELECT nome, count(*) as qtd 
 		FROM parlamentar NATURAL JOIN voto
 		WHERE id_votacao in 
 			(SELECT id_votacao 
 			FROM votacao 
 			WHERE date(dataHoraInicio)>='{}' and date(dataHoraInicio)<='{}')
-		AND id_parlamentar = '{}'
+
 		GROUP BY id_parlamentar;
 		'''
-	n_votos = cursor.execute(sql_command.format(data_in, data_fim, id_parlamentar)).fetchone()
-	try:
-		n_votos = n_votos[0]
-	
-	except TypeError:
-		n_votos = 0
+	res = cursor.execute(sql_command.format(data_in, data_fim)).fetchall()
+	for parlamentar in res:
+		parlamentares[parlamentar[0]] = parlamentar[1]
 
 	conn.close()
-	return n_votos
+	return parlamentares
 
 def chinelinho(id_parlamentar, data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
 	""" Calcula uma porcentagem entre as licenças parlamentares e o total de votos """
@@ -222,30 +235,4 @@ def chinelinho(id_parlamentar, data_in = global_keys['DATA_INICIO'], data_fim = 
 		conn.close()
 		return chinelo
 
-# Função de Ordenação
-def info_sort(func, sql_command, *args, **kwargs):
-	"""Retorna uma lista ordenada tendo como parâmetro de ordenação uma das funções estatísticas
-		args: data incial e data final usados na consulta 'sql_command'.
-		kwargs: parâmetros das funçoẽs estatísticas usadas no interior dessa função """
-	conn = sql.connect("py_politica.db")
-	cursor = conn.cursor()
-	ranking = list()
-	infos = cursor.execute(sql_command.format(*args)).fetchall()
-	for info in infos:
-		key = func(info[0], **kwargs)
-		if key == None:
-			continue
-
-		key = [info[0], key]
-		ranking.append(key)
-
-	ranking = sorted(ranking, key=lambda ranking: ranking[1], reverse=True)
-	conn.close()
-	return ranking
-
-def get_id(sql_command, *args):
-	conn = sql.connect("py_politica.db")
-	cursor = conn.cursor()
-	infos = cursor.execute(sql_command.format(*args)).fetchall()
-	infos = [i[0] for i in infos]
-	return infos
+	

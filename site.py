@@ -15,7 +15,7 @@ def votacoes():
     return flask.render_template('index.html')
 
 @site.route('/votacoes/ranking')
-def vranking():
+def v_ranking():
 	conn = sql.connect("py_politica.db")
 	cursor = conn.cursor()
 	sql_command = '''
@@ -34,7 +34,17 @@ def vranking():
 @site.route('/materias-dia')
 def materias():
     return flask.render_template('materia.html')
-    
+
+@site.route('/parlamentares/ranking')
+def p_ranking():
+	res = list()
+	assertividade = sts.assertividade_parlamentar()
+	total = sts.numero_votos()
+	for parlamentar in total.keys():
+		res.append((parlamentar, assertividade[parlamentar], total[parlamentar]))
+
+	return flask.render_template('Pranking.html', ast=res)
+
 @site.route('/json')
 def json():
     data = sts.votacoes_periodo()
