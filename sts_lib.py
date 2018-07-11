@@ -29,9 +29,26 @@ def converte_data(data_string):
 	data = time.mktime(data)
 	return data
 
-# Funções de Caulculos estatísticos
-# Funções Relacionadas às votações
+def converte_id_votacao(id_votacao):
+	conn = sql.connect("py_politica.db")
+	cursor = conn.cursor()
+	sql_command = '''
+		SELECT tipo, numero, strftime('%Y', data_apresentacao) as ano
+		FROM materia 
+		WHERE id_materia in (
+			SELECT id_materia 
+			FROM votacao
+			WHERE id_votacao = {})'''
 
+	votacao = cursor.execute(sql_command.format(id_votacao)).fetchone()
+	try:
+		id_votacao = '{} {}/{}'.format(votacao[0], votacao[1], votacao[2])
+		return id_votacao
+
+	except TypeError:
+		return id_votacao
+
+# Funções Relacionadas às votações
 def votacoes_periodo(passo = 'D', data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
 	""" Retorna o número de votações numa faixa de tempo, podendo alternar o passo da contagem """
 	conn = sql.connect("py_politica.db")
