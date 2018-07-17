@@ -1,4 +1,4 @@
-#Versão 2.1.1
+#Versão 2.2.0
 import sqlite3
 import aiohttp as aio
 from bs4 import BeautifulSoup
@@ -43,14 +43,16 @@ def insert_materias(lista_materias):
 		conn.commit()
 
 def insert_votacao(listas_votacoes):
+	
 	for votacoes in listas_votacoes:
 		for votacao in votacoes.find_all('votacao'):
 			id_votacao = votacao.find('codigosessaovotacao').text
 			id_materia = get_text_alt(votacao,'codigomateria')
+			resultado = get_text_alt(votacao,'resultado')
 			dataHorainicio = votacao.find('datasessao').text + ' ' + votacao.find("horainicio").text + ":00"
-			info = (id_votacao, id_materia, dataHorainicio)
+			info = (id_votacao, id_materia, dataHorainicio, resultado)
 			try:
-				cursor.execute('''INSERT INTO votacao (id_votacao, id_materia, dataHorainicio) VALUES (?,?,?);''', info)
+				cursor.execute('''INSERT INTO votacao (id_votacao, id_materia, dataHorainicio, resultado) VALUES (?,?,?,?);''', info)
 			except sqlite3.IntegrityError:
 				pass
 
@@ -85,6 +87,8 @@ def insert_votacao(listas_votacoes):
 					pass
 
 			conn.commit()
+		
+	print(bug, bug2, bug-bug2)
 		
 def create_ranking_votacao():
 	votacao_info = dict()
@@ -122,14 +126,14 @@ def create_ranking_votacao():
 		if total_sim == []: total_sim = [0]
 		if total_nao == []: total_nao = [0]
 		if total_abs == []: total_abs = [0]
-		assertividade = "%.2f" %(maximo*100/total)
+		indice_equilibrio = "%.2f" %(100 - maximo*100/total)
 		sql_command = '''
 			UPDATE estatisticas_votacao
-			SET total_sim = {}, total_nao = {}, total_abs = {}, assertividade = {}, competitividade_r = {}, competitividade_s = {}, entropia = {}
+			SET total_sim = {}, total_nao = {}, total_abs = {}, indice_equilibrio = {}, competitividade_r = {}, competitividade_s = {}, entropia = {}
 			WHERE id_votacao = {}
 		'''
 		
-		cursor.execute(sql_command.format(total_sim[0],total_nao[0],total_abs[0], assertividade, competitividade_r, competitividade_s, entropia, info))
+		cursor.execute(sql_command.format(total_sim[0],total_nao[0],total_abs[0], indice_equilibrio, competitividade_r, competitividade_s, entropia, info))
 	
 	conn.commit()
 	
@@ -152,7 +156,7 @@ def create_ranking_votacao():
 		if total_nao == None: total_nao = 0
 		if total_abs == None: total_abs = 0
 		
-		assertividade = "%.2f" %(max([total_sim, total_nao, total_abs])*100/votacao_info[info][3])
+		indice_equilibrio = "%.2f" %(100 - max([total_sim, total_nao, total_abs])*100/votacao_info[info][3])
 		competitividade = sorted([total_sim, total_nao, total_abs], reverse= True)
 		competitividade_r = "%.2f" %(competitividade[1] * 100/competitividade[0])
 		competitividade_s = competitividade[0] - competitividade[1]
@@ -160,10 +164,10 @@ def create_ranking_votacao():
 
 		sql_command = '''
 			UPDATE estatisticas_votacao
-			SET total_sim = {}, total_nao = {}, total_abs = {}, assertividade = {}, competitividade_r = {}, competitividade_s = {}, entropia = {}
+			SET total_sim = {}, total_nao = {}, total_abs = {}, indice_equilibrio = {}, competitividade_r = {}, competitividade_s = {}, entropia = {}
 			WHERE id_votacao = {}
 		'''
-		cursor.execute(sql_command.format(total_sim, total_nao, total_abs, assertividade, competitividade_r, competitividade_s, entropia, info))
+		cursor.execute(sql_command.format(total_sim, total_nao, total_abs, indice_equilibrio, competitividade_r, competitividade_s, entropia, info))
 
 	conn.commit()
 				
@@ -201,11 +205,12 @@ async def async_materia():
 
 async def async_votacao():
 	votacoes = list()
-	timeout = timeout = aio.ClientTimeout(total=60*60)
-	async with aio.ClientSession(trust_env = True, timeout=timeout) as session:
+	connector = aio.TCPConnector(limit=10)
+	timeout = aio.ClientTimeout(total=60*60)
+	async with aio.ClientSession(trust_env=True, timeout=timeout, connector=connector) as session:
 		for ano in range(2010,tempo_atual[0]+1):
-			for mes in range(1,13):
-				data_in ='{}{:02d}01'.format(ano,mes)
+			for mes in range(1,12):
+				data_in ='{}{:02d}02'.format(ano,mes)
 				data_fim = '{}{:02d}01'.format(ano,mes+1)
 				votacoes.append(get_votacao(data_in, data_fim, session))
 		
