@@ -45,6 +45,7 @@ con.cursor().executescript('''
 		id_votacao varchar primary key,
 		id_materia varchar null,
 		dataHoraInicio datetime not null,
+		resultado varchar null,
 		foreign key(id_materia) references materia(id_materia));
 
 	CREATE TABLE votacao_secreta( 
@@ -68,7 +69,7 @@ con.cursor().executescript('''
 		total_sim integer null,
 		total_nao integer null,
 		total_abs integer null,
-		assertividade real null,
+		indice_equilibrio real null,
 		competitividade_r real null,
 		competitividade_s integer null,
 		entropia real null,
