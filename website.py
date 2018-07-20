@@ -40,8 +40,9 @@ def p_ranking():
 	res = list()
 	assertividade = sts.assertividade_parlamentar()
 	total = sts.numero_votos()
+	concordancia = sts.concordancia()
 	for parlamentar in total.keys():
-		res.append((parlamentar, assertividade[parlamentar], total[parlamentar]))
+		res.append((parlamentar, assertividade[parlamentar], total[parlamentar], concordancia[parlamentar]))
 
 	return flask.render_template('Pranking.html', ast=res)
 
