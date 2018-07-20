@@ -134,7 +134,7 @@ def materias_periodo(passo = 'D', data_in = global_keys['DATA_INICIO'], data_fim
 		return res
 
 # Funções relacionadas aos parlamentares
-def assertividade_parlamentar(data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
+def assertividade_parlamentar():
 	""" Calcula a assertividade dos parlamentares em um período de tempo
 	Assertividade é da pela quantidade de votos na descrição mais votada pelo parlamentar / total de votos do parlamentar
 	O calculo só é realizado com totais de votos superiores a 40 votos, e só leva em conta votações nominais"""
@@ -142,34 +142,32 @@ def assertividade_parlamentar(data_in = global_keys['DATA_INICIO'], data_fim = g
 	cursor = conn.cursor()
 	parlamentares = dict()
 	sql_command = '''
-		SELECT nome, count(*) as qtd 
-		FROM parlamentar NATURAL JOIN voto
-		WHERE id_votacao in 
-			(SELECT id_votacao 
-			FROM votacao 
-			WHERE date(dataHoraInicio)>='{}' and date(dataHoraInicio)<='{}') 
-			and descricao != 'Votou'
-		GROUP BY id_parlamentar, descricao;
+		SELECT nome, sum(qtd), total
+		FROM (SELECT nome, descricao, count(*) as qtd 
+			FROM parlamentar NATURAL JOIN voto
+			WHERE id_votacao in 
+				(SELECT id_votacao 
+				FROM votacao) 
+			and descricao = 'Sim' or descricao = 'Não'
+			GROUP BY id_parlamentar, descricao)r 
+		NATURAL JOIN 
+			(SELECT nome, count(*) as total
+			FROM parlamentar NATURAL JOIN voto
+			WHERE id_votacao not in 
+				(SELECT id_votacao
+				FROM votacao_secreta)
+			GROUP BY id_parlamentar)l
+		GROUP BY nome;
+
 	'''
  
-	res = cursor.execute(sql_command.format(data_in, data_fim)).fetchall()
+	res = cursor.execute(sql_command).fetchall()
 	for parlamentar in res:
-		if parlamentar[0] in parlamentares.keys():
-			parlamentares[parlamentar[0]].append(parlamentar[1])
-
-		else:
-			parlamentares[parlamentar[0]] = [parlamentar[1]]
-
-	for parlamentar in parlamentares.keys():
-		total = sum(parlamentares[parlamentar])
-		if total >= 40:
-			maximo = max(parlamentares[parlamentar])
-			assertividade = "%.2f" %((maximo/total)*100)
+		if parlamentar[2]>=40:
+			parlamentares[parlamentar[0]] = "%.2f" %(parlamentar[1]*100/parlamentar[2])
 		
 		else:
-			assertividade = 'NA'
-		
-		parlamentares[parlamentar] = assertividade
+			parlamentares[parlamentar[0]] = 'NA'
 
 	sql_command = '''
 		SELECT nome 
@@ -235,4 +233,33 @@ def chinelinho(id_parlamentar, data_in = global_keys['DATA_INICIO'], data_fim = 
 		conn.close()
 		return chinelo
 
+def concordancia():
+	conn = sql.connect("py_politica.db")
+	cursor = conn.cursor()
+	parlamentares = dict()
 	
+	sql_command = '''
+		SELECT * FROM (SELECT nome, count(*) 
+		FROM parlamentar NATURAL JOIN voto NATURAL JOIN votacao
+		WHERE descricao = 'Sim' AND resultado = 'A' OR descricao = 'Não' AND resultado = 'R' 
+		GROUP BY id_parlamentar)r NATURAL JOIN
+		(SELECT nome, count(*) as total FROM voto NATURAL JOIN parlamentar WHERE id_votacao not in 
+		(SELECT id_votacao FROM votacao_secreta) GROUP BY id_parlamentar)l
+		WHERE total >= 40 
+	'''
+
+	res = cursor.execute(sql_command).fetchall()
+	for parlamentar in res:
+		parlamentares[parlamentar[0]] = "%.2f" %(parlamentar[1] *100/parlamentar[2])
+
+	sql_command = '''
+		SELECT nome 
+		FROM parlamentar'''
+
+	res = cursor.execute(sql_command).fetchall()
+	for parlamentar in res:
+		if parlamentar[0] not in parlamentares.keys():
+			parlamentares[parlamentar[0]] = 'NA'
+
+	conn.close()
+	return parlamentares
