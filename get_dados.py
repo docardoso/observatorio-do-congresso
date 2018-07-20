@@ -43,7 +43,7 @@ def insert_materias(lista_materias):
 		conn.commit()
 
 def insert_votacao(listas_votacoes):
-	
+
 	for votacoes in listas_votacoes:
 		for votacao in votacoes.find_all('votacao'):
 			id_votacao = votacao.find('codigosessaovotacao').text
@@ -83,12 +83,12 @@ def insert_votacao(listas_votacoes):
 				info = (id_votacao, placar_sim, placar_nao, placar_abs)
 				try:
 					cursor.execute('''INSERT INTO votacao_secreta (id_votacao, placarSim, placarNao, placarAbs) VALUES (?,?,?,?);''', info)
+
 				except sqlite3.IntegrityError:
 					pass
 
 			conn.commit()
 		
-	print(bug, bug2, bug-bug2)
 		
 def create_ranking_votacao():
 	votacao_info = dict()
