@@ -15,11 +15,16 @@ global_keys['DATA_FIM'] = '{}-{}-{}'.format(data_atual[0], data_atual[1], data_a
 # Funções auxiliares
 def converte_data(data_string):
 	""" Converte as data_strings em milisegundos a partir da epoch"""
+
 	data = time.strptime(data_string , '%Y-%m-%d')
 	data = time.mktime(data)
 	return data
 
 def converte_id_votacao(id_votacao):
+	""" Converte o id das votações, encontrados na API, em composições de tipo, número e ano
+	da matéria que está sendo votada. Caso a votação não seja associada a uma matéria, retorna-se 
+	o id da API. """
+
 	conn = sql.connect("py_politica.db")
 	cursor = conn.cursor()
 	sql_command = '''
@@ -42,6 +47,7 @@ def converte_id_votacao(id_votacao):
 # Funções Relacionadas às votações
 def votacoes_periodo(passo = 'D', data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
 	""" Retorna o número de votações numa faixa de tempo, podendo alternar o passo da contagem """
+
 	conn = sql.connect("py_politica.db")
 	cursor = conn.cursor()
 	if passo == 'D':
@@ -87,8 +93,10 @@ def votacoes_periodo(passo = 'D', data_in = global_keys['DATA_INICIO'], data_fim
 		return res
 
 # Funções relacionadas às Matérias
+
 def materias_periodo(passo = 'D', data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
-	""" Retorna o número de votações numa faixa de tempo, podendo alternar o passo da contagem """
+	""" Retorna o número de Matérias apresentadas numa faixa de tempo, podendo alternar o passo da contagem """
+
 	conn = sql.connect("py_politica.db")
 	cursor = conn.cursor()
 	if passo == 'D':
@@ -135,9 +143,10 @@ def materias_periodo(passo = 'D', data_in = global_keys['DATA_INICIO'], data_fim
 
 # Funções relacionadas aos parlamentares
 def assertividade_parlamentar():
-	""" Calcula a assertividade dos parlamentares em um período de tempo
-	Assertividade é da pela quantidade de votos na descrição mais votada pelo parlamentar / total de votos do parlamentar
-	O calculo só é realizado com totais de votos superiores a 40 votos, e só leva em conta votações nominais"""
+	""" Calcula a assertividade dos parlamentares.\n
+	Assertividade é dada pela quantidade de votos Sim e Não dividido pelo somatório de votos Sim, Não, Abstenções e P-NRV
+	do parlamentar. O calculo só é realizado com totais de votos superiores a 40 votos e só leva em conta votações ostensivas"""
+
 	conn = sql.connect("py_politica.db")
 	cursor = conn.cursor()
 	parlamentares = dict()
@@ -145,10 +154,7 @@ def assertividade_parlamentar():
 		SELECT nome, sum(qtd), total
 		FROM (SELECT nome, descricao, count(*) as qtd 
 			FROM parlamentar NATURAL JOIN voto
-			WHERE id_votacao in 
-				(SELECT id_votacao 
-				FROM votacao) 
-			and descricao = 'Sim' or descricao = 'Não'
+			WHERE descricao = 'Sim' or descricao = 'Não'
 			GROUP BY id_parlamentar, descricao)r 
 		NATURAL JOIN 
 			(SELECT nome, count(*) as total
@@ -156,6 +162,8 @@ def assertividade_parlamentar():
 			WHERE id_votacao not in 
 				(SELECT id_votacao
 				FROM votacao_secreta)
+			and descricao = 'Sim' or descricao = 'Não' 
+			or descricao = 'Abstenção' or descricao = 'P-NRV'
 			GROUP BY id_parlamentar)l
 		GROUP BY nome;
 
@@ -181,30 +189,68 @@ def assertividade_parlamentar():
 	conn.close()
 	return parlamentares
 
-def numero_votos(data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
-	""" Calcula o Número de Votos dos parlamentares dado uma faixa de tempo """
+def totais_parlamentares():
+	""" Calcula os totais de votos, efetívos e ausências (justificadas e não justificadas) """
+
 	conn = sql.connect("py_politica.db")
 	cursor = conn.cursor()
 	parlamentares = dict()
-	sql_command = '''
+	sql_command_total = '''
 		SELECT nome, count(*) as qtd 
 		FROM parlamentar NATURAL JOIN voto
-		WHERE id_votacao in 
-			(SELECT id_votacao 
-			FROM votacao 
-			WHERE date(dataHoraInicio)>='{}' and date(dataHoraInicio)<='{}')
-
-		GROUP BY id_parlamentar;
+		GROUP BY id_parlamentar
+		ORDER BY id_parlamentar;
 		'''
-	res = cursor.execute(sql_command.format(data_in, data_fim)).fetchall()
-	for parlamentar in res:
-		parlamentares[parlamentar[0]] = parlamentar[1]
+	sql_command_valido = '''
+		SELECT nome, count(*) as validos 
+		FROM parlamentar NATURAL JOIN voto
+		WHERE descricao = 'Sim' or descricao = 'Não' or descricao = 'Abstenção'
+		GROUP BY id_parlamentar
+		ORDER BY id_parlamentar;
+		'''	
+
+	sql_command_ausencia = '''
+		SELECT nome, count(*) as ausencias
+		FROM parlamentar NATURAL JOIN voto
+		WHERE descricao != 'Sim' and descricao != 'Não' and 
+		descricao != 'Abstenção'and descricao != 'P-NRV' and 
+		descricao != 'P-OD' and descricao != 'Votou'
+		GROUP BY id_parlamentar
+		ORDER BY id_parlamentar;
+	'''
+	sql_command_justificada = ''' 
+		SELECT nome, count(*) as a_justificada 
+		FROM parlamentar NATURAL JOIN voto
+		WHERE descricao != 'Sim' and descricao != 'Não' and 
+		descricao != 'Abstenção' and descricao != 'NCom' and 
+		descricao != 'NA' and descricao != 'P-NRV' and 
+		descricao != 'P-OD' and descricao != 'Votou'
+		GROUP BY id_parlamentar
+		ORDER BY id_parlamentar;
+	'''
+	total = cursor.execute(sql_command_total).fetchall()
+	valido = cursor.execute(sql_command_valido).fetchall()
+	ausencia = cursor.execute(sql_command_ausencia).fetchall()
+	justificada = cursor.execute(sql_command_justificada).fetchall()
+	parlamentares = {parlamentar[0]:[parlamentar[1],0,0,0] for parlamentar in total}
+	for parlamentar in valido:
+		parlamentares[parlamentar[0]].pop(1)
+		parlamentares[parlamentar[0]].insert(1,parlamentar[1])
+	
+	for parlamentar in ausencia:
+		parlamentares[parlamentar[0]].pop(2)
+		parlamentares[parlamentar[0]].insert(2,parlamentar[1])	
+
+	for parlamentar in justificada:
+		parlamentares[parlamentar[0]].pop(3)
+		parlamentares[parlamentar[0]].insert(3,parlamentar[1])	
 
 	conn.close()
 	return parlamentares
 
 def chinelinho(id_parlamentar, data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
 	""" Calcula uma porcentagem entre as licenças parlamentares e o total de votos """
+
 	conn = sql.connect("py_politica.db")
 	cursor = conn.cursor()
 	sql_command = ''' 
@@ -234,6 +280,11 @@ def chinelinho(id_parlamentar, data_in = global_keys['DATA_INICIO'], data_fim = 
 		return chinelo
 
 def concordancia():
+	""" Calcula uma porcentagem relacionada ao número de vezes que o voto de um parlamentar 
+	concordou com o resultado de uma votação. Só leva em consideração votações ostensivas e parlamentares
+	que tenham mais de 40 votos. Caso contrário registra-se 'NA'.\n
+	Retorna uma lista de tuplas (parlamentar, porcentagem). """
+
 	conn = sql.connect("py_politica.db")
 	cursor = conn.cursor()
 	parlamentares = dict()

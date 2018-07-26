@@ -67,8 +67,11 @@
 					<tr>
 						<th>Nome</th>
                         <th>(%) Assertividade</th>
-                        <th>Total de votos</th>
                         <th>(%) Índice de Concordância </th>
+                        <th>Total de votos</th>
+                        <th>Votos Válidos</th>
+                        <th>Total de Faltas</th>
+                        <th>Total de Faltas Justificadas</th>
 
 					</tr>
 				</thead>
@@ -79,6 +82,9 @@
                         <td>{{ elemento[1] }}</td>
                         <td>{{ elemento[2] }}</td>
                         <td>{{ elemento[3] }}</td>
+                        <td>{{ elemento[4] }}</td>
+                        <td>{{ elemento[5] }}</td>
+                        <td>{{ elemento[6] }}</td>
 					</tr>
 					{% endfor %}
 				</tbody>
