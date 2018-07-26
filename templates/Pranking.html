@@ -1,95 +1,49 @@
-<html>
-	<head>
-		<title> Observatório do Congresso </title>
+{% extends 'base.html' %}
 
-		<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" integrity="sha384-WskhaSGFgHYWDcbwN70/dfYBj47jz9qbsMId/iRN3ewGhXQFZCSftd1LZCfmhktB" crossorigin="anonymous">
-		<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.css">
-		<script src="https://code.jquery.com/jquery-3.3.1.js" integrity="sha256-2Kok7MbOyxpgUVvAk/HJ2jigOSYS2auK4Pfzbm7uH60=" crossorigin="anonymous"></script>  
-		<script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.js"></script>
+{% block title %} Ranking Parlamentar {% endblock %}
+{% block head %}
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" integrity="sha384-WskhaSGFgHYWDcbwN70/dfYBj47jz9qbsMId/iRN3ewGhXQFZCSftd1LZCfmhktB" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.css">
+    <script src="https://code.jquery.com/jquery-3.3.1.js" integrity="sha256-2Kok7MbOyxpgUVvAk/HJ2jigOSYS2auK4Pfzbm7uH60=" crossorigin="anonymous"></script>  
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.js"></script>
 
-		<script type="text/javascript" class="init">
-			$(document).ready(function() {
-				$('#Fancy').DataTable();
-			});
-		</script>
+    <script type="text/javascript" class="init">
+        $(document).ready(function() {
+            $('#Fancy').DataTable();
+        });
+    </script>
+{% endblock %}
 
-    </head>
-    
-    <body>
-        <header>
-                <nav class="navbar navbar-expand-lg navbar-dark" style="background-color: #2f4f2f;">
-                    <a class="navbar-brand h1 mb-0" href="/">Observatório do Congresso</a>
-                    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-                        <span class="navbar-toggler-icon"></span>
-                    </button>
-                
-                    <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                        <ul class="navbar-nav mr-auto">
-                            <li class="nav-item dropdown mr-auto">
-                                <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                    Votações
-                                </a>
-                                <div class="dropdown-menu" aria-labelledby="navbarDropdown">
-                                    <a class="dropdown-item" href="/votacoes/votacoes-dia">Votações/dia</a>
-                                    <a class="dropdown-item" href="votacoes/ranking">Rankings</a>
-                                </div>
-                            </li>
-                            <li class="nav-item dropdown mr-auto">
-                                <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                    Parlamentares
-                                </a>
-                                <div class="dropdown-menu" aria-labelledby="navbarDropdown">
-                                    <a class="dropdown-item" href="/parlamentares/ranking">Rankings</a>
-                                </div>
-                            </li>
-                            <li class="nav-item dropdown mr-auto">
-                                <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                    Matérias
-                                </a>
-                                <div class="dropdown-menu" aria-labelledby="navbarDropdown">
-                                    <a class="dropdown-item" href="/materias-dia">Matérias/dia</a>
-                                    <!-- <a class="dropdown-item" href="#">Another action</a>
-                                    <a class="dropdown-item" href="#">Some</a> -->
-                                </div>
-                            </li>
-                        </ul>
-                        <form class="form-inline my-2 my-lg-0">
-                            <input class="form-control mr-sm-2" type="search" placeholder="Buscar" aria-label="Buscar">
-                            <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Buscar</button>
-                        </form>
-                    </div>
-                </nav>
-            </header>
-		<div class="Container mt-3">
-			<table id="Fancy", class="Display", style="width: 100%">
-				<thead>
-                    <tt class="row">Ranking dos Parlamentares</tt>
-					<tr>
-						<th>Nome</th>
-                        <th>(%) Assertividade</th>
-                        <th>(%) Índice de Concordância </th>
-                        <th>Total de votos</th>
-                        <th>Votos Válidos</th>
-                        <th>Total de Faltas</th>
-                        <th>Total de Faltas Justificadas</th>
+{% block content %}
+    <div class="Container mt-3">
+        <table id="Fancy", class="Display", style="width: 85%">
+            <thead>
+                <tt class="row">Ranking dos Parlamentares</tt>
+                <tr>
+                    <th>Nome</th>
+                    <th>(%) Assertividade</th>
+                    <th>(%) Índice de Concordância </th>
+                    <th>Total de votos</th>
+                    <th>Votos Válidos</th>
+                    <th>Total de Faltas</th>
+                    <th>Total de Faltas Justificadas</th>
 
-					</tr>
-				</thead>
-				<tbody>
-					{% for elemento in ast %}
-					<tr>
-						<td>{{ elemento[0] }}</td>
-                        <td>{{ elemento[1] }}</td>
-                        <td>{{ elemento[2] }}</td>
-                        <td>{{ elemento[3] }}</td>
-                        <td>{{ elemento[4] }}</td>
-                        <td>{{ elemento[5] }}</td>
-                        <td>{{ elemento[6] }}</td>
-					</tr>
-					{% endfor %}
-				</tbody>
-			</table>
-		</div>
-	</body>
+                </tr>
+            </thead>
+            <tbody>
+                {% for elemento in ast %}
+                <tr>
+                    <td>{{ elemento[0] }}</td>
+                    <td>{{ elemento[1] }}</td>
+                    <td>{{ elemento[2] }}</td>
+                    <td>{{ elemento[3] }}</td>
+                    <td>{{ elemento[4] }}</td>
+                    <td>{{ elemento[5] }}</td>
+                    <td>{{ elemento[6] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}
 
-</html>
