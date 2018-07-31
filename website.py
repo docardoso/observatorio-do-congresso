@@ -10,7 +10,7 @@ website.config['DEBUG'] = True
 def main():
     return flask.render_template("main.html")
 
-@website.route('/votacoes/votacoes-dia')
+@website.route('/votacoes/graficos')
 def votacoes():
     return flask.render_template('index.html')
 
@@ -31,7 +31,7 @@ def v_ranking():
 
 	return flask.render_template('VRanking.html', ast=res)
 
-@website.route('/materias-dia')
+@website.route('/materias/graficos')
 def materias():
     return flask.render_template('materia.html')
 
@@ -54,6 +54,10 @@ def p_ranking():
 
 	return flask.render_template('Pranking.html', ast=res)
 
+@website.route('/tipo')
+def tipo():
+    return flask.render_template('tipovoto.html')
+
 @website.route('/json')
 def json():
     data = sts.votacoes_periodo()
@@ -66,6 +70,10 @@ def json_materia():
     data = [[sts.converte_data(x[0])*10**3,x[1]] for x in data]        
     return flask.jsonify(data)
 
+@website.route('/json-tipo')
+def json_tipo():
+    data = sts.tipo_voto()
+    return flask.jsonify(data)
 
 if __name__ == '__main__':
     website.run()
