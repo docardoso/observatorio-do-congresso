@@ -10,7 +10,7 @@ website.config['DEBUG'] = True
 def main():
     return flask.render_template("main.html")
 
-@website.route('/votacoes/graficos')
+@website.route('/votacoes/grafico1')
 def votacoes():
     return flask.render_template('index.html')
 
@@ -54,7 +54,7 @@ def p_ranking():
 
 	return flask.render_template('Pranking.html', ast=res)
 
-@website.route('/tipo')
+@website.route('/votacoes/grafico2')
 def tipo():
     return flask.render_template('tipovoto.html')
 
