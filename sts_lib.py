@@ -314,3 +314,52 @@ def concordancia():
 
 	conn.close()
 	return parlamentares
+
+def tipo_voto():
+	
+	conn = sql.connect("py_politica.db")
+	cursor = conn.cursor()
+	count = 0 
+	sql_command = ''' 
+		SELECT descricao, qtd
+		FROM (SELECT descricao, count(*) as qtd
+				FROM voto 
+				WHERE descricao != 'Votou' and descricao not like 'L%'
+				GROUP BY descricao)o
+		WHERE qtd > 200
+		
+		UNION
+		
+		SELECT descricao, sum(qtd)
+		FROM (SELECT descricao, count(*) as qtd
+				FROM voto 
+				WHERE descricao != 'Votou' and descricao not like 'L%'
+				GROUP BY descricao)o
+		WHERE qtd <= 200
+		
+		UNION 
+		
+		SELECT descricao, sum(qtd)
+			FROM (SELECT descricao, count(*) as qtd
+				FROM voto
+				WHERE descricao like 'L%'
+				GROUP BY descricao)l
+		
+		ORDER BY qtd DESC
+	'''
+
+	res = cursor.execute(sql_command).fetchall()
+	res = [list(x) for x in res]
+	for tipo in res:
+		if 'Presidente' in tipo[0]:
+			count += tipo[1]
+			outros = ['Outros', count]
+			res.remove(tipo)
+			continue
+		
+		if 'L' == tipo[0][0]:
+			tipo[0] = 'Licenças'
+	
+	res.append(outros)
+	res = sorted(res, key=lambda res:res[1], reverse=True)
+	return res 
