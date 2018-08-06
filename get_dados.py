@@ -6,7 +6,8 @@ import asyncio as asy
 import logging
 import time
 import requests
-import scipy.stats as st
+import scipy.stats as sct
+import sts_lib as sts
 
 conn = sqlite3.connect("py_politica.db") # Conexão com o BD;
 cursor = conn.cursor() # Criação de um cursor para realizar operações no BD;
@@ -17,6 +18,10 @@ def main():
 	loop = asy.get_event_loop()
 	loop.run_until_complete(async_materia())
 	loop.run_until_complete(async_votacao())
+	get_partidos()
+	parlamentares = cursor.execute('''SELECT id_parlamentar FROM parlamentar''').fetchall()
+	loop.run_until_complete(async_info(parlamentares, 'filiacoes'))
+	loop.run_until_complete(async_info(parlamentares, 'mandatos'))
 	loop.close()
 	create_ranking_votacao()
 
@@ -88,11 +93,47 @@ def insert_votacao(listas_votacoes):
 					pass
 
 			conn.commit()
+
+def insert_filiacao(lista_filiacoes):
+	for filiacoes in lista_filiacoes:
+		parlamentar = filiacoes.find('codigoparlamentar').text
+
+		for filiacao in filiacoes.find_all('filiacao'):
+			id_partido = filiacao.find('codigopartido').text
+			data_filia = filiacao.find('datafiliacao').text
+			data_desfilia = get_text_alt(filiacao, 'datadesfiliacao')
+			info = (parlamentar, id_partido, data_filia, data_desfilia)
 		
+			try:
+				cursor.execute('''INSERT INTO filiacao (id_parlamentar, id_partido, data_filiacao, data_desfiliacao) VALUES (?,?,?,?);''', info)
+			
+			except sqlite3.IntegrityError:
+				pass
+
 		
+	conn.commit()
+
+
+def insert_mandatos(lista_mandatos):
+	for mandatos in lista_mandatos:
+		parlamentar = mandatos.find('codigoparlamentar').text
+		for mandato in mandatos.find_all('mandato'):
+			id_mandato = get_text_alt(mandato, 'codigomandato')
+			data_in = mandato.find('datainicio').text
+			data_fim = mandato.find('datafim').text
+			uf = mandato.find('ufparlamentar').text
+			info = (parlamentar, id_mandato, data_in, data_fim, uf)
+		
+			try:
+				cursor.execute('''INSERT INTO mandato (id_parlamentar, id_mandato, data_inicio, data_fim, uf) VALUES (?,?,?,?,?);''', info)
+			
+			except sqlite3.IntegrityError:
+				pass
+					
+	conn.commit()
+
 def create_ranking_votacao():
 	votacao_info = dict()
-
 	sql_command = '''
 		SELECT id_votacao, descricao, count(*) 
 		FROM voto 
@@ -103,7 +144,7 @@ def create_ranking_votacao():
 				(SELECT id_votacao 
 				FROM votacao_secreta)) 
 		GROUP BY id_votacao, descricao
-		ORDER BY count(*) desc
+		ORDER BY id_votacao, count(*) desc
 	'''	
 	infos = cursor.execute(sql_command).fetchall()
 	for info in infos:
@@ -114,26 +155,29 @@ def create_ranking_votacao():
 			votacao_info[info[0]] = [(info[1],info[2])]
 	
 	for info in votacao_info.keys():
-		maximo = max([i[1] for i in votacao_info[info]])
-		total = sum([i[1] for i in votacao_info[info]])
-		total_sim = [i[1] for i in votacao_info[info] if i[0] == 'Sim']
-		total_nao = [i[1] for i in votacao_info[info] if i[0] == 'Não']
-		total_abs = [i[1] for i in votacao_info[info] if i[0] == 'Abstenção']
-		competitividade_r = "%.2f" %(votacao_info[info][1][1]*100/votacao_info[info][0][1])
-		competitividade_s = votacao_info[info][0][1]-votacao_info[info][1][1]
+		total_sim = 0 
+		total_nao = 0 
+		total_abs = 0 
+		
+		for total in votacao_info[info]:	
+			if total[0] == 'Sim': total_sim = total[1]
+			elif total[0] == 'Não': total_nao = total[1]
+			elif total[0] == 'Abstenção' or total[0] == 'P-NRV': total_abs += total[1]
+
+		eq = [x[1] for x in votacao_info[info]]
 		entropia = [int(i[1]) for i in votacao_info[info]]
-		entropia = "%.2f" %(st.entropy(entropia))
-		if total_sim == []: total_sim = [0]
-		if total_nao == []: total_nao = [0]
-		if total_abs == []: total_abs = [0]
-		indice_equilibrio = "%.2f" %(100 - maximo*100/total)
+		comp_r = sts.competitividade([total_sim, total_nao], 'r')
+		comp_s = sts.competitividade([total_sim, total_nao], 's')
+		indice_equilibrio = sts.equilibrio(eq)
+		entropia = sct.entropy(entropia)
+
 		sql_command = '''
 			UPDATE estatisticas_votacao
-			SET total_sim = {}, total_nao = {}, total_abs = {}, indice_equilibrio = {}, competitividade_r = {}, competitividade_s = {}, entropia = {}
+			SET total_sim = {}, total_nao = {}, total_abs = {}, indice_equilibrio = {:.2f}, competitividade_r = {:.2f}, competitividade_s = {}, entropia = {:.3f}
 			WHERE id_votacao = {}
 		'''
 		
-		cursor.execute(sql_command.format(total_sim[0],total_nao[0],total_abs[0], indice_equilibrio, competitividade_r, competitividade_s, entropia, info))
+		cursor.execute(sql_command.format(total_sim,total_nao,total_abs, indice_equilibrio, comp_r, comp_s, entropia, info))
 	
 	conn.commit()
 	
@@ -141,8 +185,10 @@ def create_ranking_votacao():
 	sql_command = '''
 		SELECT id_votacao, placarSim, placarNao, placarAbs, count (descricao)
 		FROM votacao_secreta NATURAL JOIN voto 
-		GROUP BY id_votacao
+		WHERE descricao = 'P-NRV'
+		GROUP BY id_votacao, descricao
 	'''
+
 	infos = cursor.execute(sql_command).fetchall()
 	for info in infos:
 		votacao_info[info[0]] = info[1:]
@@ -151,23 +197,25 @@ def create_ranking_votacao():
 	for info in votacao_info.keys():
 		total_sim = votacao_info[info][0]
 		total_nao = votacao_info[info][1]
-		total_abs = votacao_info[info][2]
+		total_abs = votacao_info[info][2] 
 		if total_sim == None: total_sim = 0
 		if total_nao == None: total_nao = 0
 		if total_abs == None: total_abs = 0
 		
-		indice_equilibrio = "%.2f" %(100 - max([total_sim, total_nao, total_abs])*100/votacao_info[info][3])
-		competitividade = sorted([total_sim, total_nao, total_abs], reverse= True)
-		competitividade_r = "%.2f" %(competitividade[1] * 100/competitividade[0])
-		competitividade_s = competitividade[0] - competitividade[1]
-		entropia = "%.3f" %(st.entropy(competitividade))
+		total_abs += votacao_info[info][3]
+		
+		totais = [total_sim, total_nao, total_abs] 
+		comp_r = sts.competitividade(totais[:2], 'r')
+		comp_s = sts.competitividade(totais[:2], 's')
+		entropia = sct.entropy(totais)
+		indice_equilibrio = sts.equilibrio(totais)
 
 		sql_command = '''
 			UPDATE estatisticas_votacao
-			SET total_sim = {}, total_nao = {}, total_abs = {}, indice_equilibrio = {}, competitividade_r = {}, competitividade_s = {}, entropia = {}
+			SET total_sim = {}, total_nao = {}, total_abs = {}, indice_equilibrio = {:.2f}, competitividade_r = {:.2f}, competitividade_s = {}, entropia = {:.3f}
 			WHERE id_votacao = {}
 		'''
-		cursor.execute(sql_command.format(total_sim, total_nao, total_abs, indice_equilibrio, competitividade_r, competitividade_s, entropia, info))
+		cursor.execute(sql_command.format(total_sim, total_nao, total_abs, indice_equilibrio, comp_r, comp_s, entropia, info))
 
 	conn.commit()
 				
@@ -181,8 +229,12 @@ def get_partidos():
 		nome = partido.find('nome').text
 		data_criacao = partido.find('datacriacao').text
 		info = (id_partido, sigla, nome, data_criacao)
-		cursor.execute('''INSERT INTO partido (id_partido, sigla, nome, data_criacao) VALUES (?,?,?,?);''', info)
-	
+		
+		try:
+			cursor.execute('''INSERT INTO partido (id_partido, sigla, nome, data_criacao) VALUES (?,?,?,?);''', info)
+		except sqlite3.IntegrityError:
+			pass
+			
 	conn.commit()
 
 async def get_materia(ano, session):
@@ -196,6 +248,18 @@ async def get_votacao(data_in, data_fim, session):
 	async with session.get(URL.format(data_in, data_fim)) as listas_votacoes:
 		listas_votacoes = BeautifulSoup(await listas_votacoes.text(), 'lxml')
 		return listas_votacoes
+
+# async def get_filiacao(parlamentar, session):
+# 	URL = 'http://legis.senado.leg.br/dadosabertos/senador/{}/filiacoes'
+# 	async with session.get(URL.format(parlamentar)) as filiacao:
+# 		filiacao = BeautifulSoup(await filiacao.text(), 'lxml')
+# 		return filiacao
+
+async def get_info_parlamentar(parlamentar, info, session):
+	URL = 'http://legis.senado.leg.br/dadosabertos/senador/{}/{}'
+	async with session.get(URL.format(parlamentar, info)) as info:
+		info = BeautifulSoup(await info.text(), 'lxml')
+		return info
 
 async def async_materia():
 	async with aio.ClientSession(trust_env = True) as session:
@@ -216,5 +280,18 @@ async def async_votacao():
 		
 		votacoes = await asy.gather(*votacoes)
 		insert_votacao(votacoes)
+
+
+async def async_info(parlamentares, info):
+	connector = aio.TCPConnector(limit=10)
+	timeout = aio.ClientTimeout(total=60*60)
+	async with aio.ClientSession(trust_env=True, timeout=timeout, connector=connector) as session:
+		res = [get_info_parlamentar(parlamentar[0], info, session) for parlamentar in parlamentares]
+		res = await asy.gather(*res)
+		if info == 'filiacoes':
+			insert_filiacao(res)
+		
+		elif info == 'mandatos':
+			insert_mandatos(res)
 
 main()

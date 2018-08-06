@@ -45,6 +45,21 @@ def converte_id_votacao(id_votacao):
 
 
 # Funções Relacionadas às votações
+def equilibrio(lista):
+	maximo = max(lista)
+	res = maximo * 100/81
+	return 100 - res
+
+def competitividade(lista, tipo):
+	lista = sorted(lista, reverse = True)
+	if tipo == 'r':
+		try:
+			return lista[1]*100/lista[0]
+		except ZeroDivisionError:
+			return 0
+
+	if tipo == 's': return lista[0]-lista[1]
+
 def votacoes_periodo(passo = 'D', data_in = global_keys['DATA_INICIO'], data_fim = global_keys['DATA_FIM']):
 	""" Retorna o número de votações numa faixa de tempo, podendo alternar o passo da contagem """
 
@@ -120,7 +135,7 @@ def materias_periodo(passo = 'D', data_in = global_keys['DATA_INICIO'], data_fim
 			WHERE date(data_apresentacao) >= '{}' AND
 				date(data_apresentacao) <= '{}'
 			GROUP BY tmp
-			ORDER BY date(dataHoraInicio);
+			ORDER BY date(data_apresentacao);
 		'''	
 		res = cursor.execute(sql_command.format(data_in,data_fim)).fetchall()
 		res = [list(x) for x in res]
@@ -313,6 +328,23 @@ def concordancia():
 			parlamentares[parlamentar[0]] = 'NA'
 
 	conn.close()
+	return parlamentares
+
+def count_info(info):
+	conn = sql.connect("py_politica.db")
+	cursor = conn.cursor()
+	parlamentares = dict()
+
+	sql_command = '''
+		SELECT nome, count(*) 
+		FROM {} NATURAL JOIN parlamentar
+		GROUP BY id_parlamentar
+	'''
+
+	res = cursor.execute(sql_command.format(info)).fetchall()
+	for parlamentar in res:
+		parlamentares[parlamentar[0]] = parlamentar[1]
+		
 	return parlamentares
 
 def tipo_voto():

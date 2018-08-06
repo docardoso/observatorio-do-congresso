@@ -41,6 +41,8 @@ def p_ranking():
 	assertividade = sts.assertividade_parlamentar()
 	total = sts.totais_parlamentares()
 	concordancia = sts.concordancia()
+	filiacao = sts.count_info('filiacao')
+	mandato = sts.count_info('mandato')
 	for parlamentar in total.keys():
 		res.append(
 			(parlamentar, 
@@ -48,6 +50,8 @@ def p_ranking():
 			concordancia[parlamentar], 
 			total[parlamentar][0], 
 			total[parlamentar][1], 
+			filiacao[parlamentar],
+			mandato[parlamentar],
 			total[parlamentar][2], 
 			total[parlamentar][3])
 			)
@@ -66,8 +70,8 @@ def json():
 
 @website.route('/json-materia')
 def json_materia():
-    data = sts.materias_periodo()
-    data = [[sts.converte_data(x[0])*10**3,x[1]] for x in data]        
+    data = sts.materias_periodo('M')
+    data = [[sts.converte_data(x[0]+'-01')*10**3,x[1]] for x in data]        
     return flask.jsonify(data)
 
 @website.route('/json-tipo')

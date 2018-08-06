@@ -20,10 +20,18 @@ con.cursor().executescript('''
 		id_partido varchar not null,
 		data_filiacao date not null,
 		data_desfiliacao date null,
-		uf varchar not null,
 		primary key(id_parlamentar, id_partido, data_filiacao),
 		foreign key(id_parlamentar) references parlamentar(id_parlamentar),
 		foreign key(id_partido) references partido(id_partido));
+
+	CREATE TABLE mandato(
+		id_parlamentar varchar not null,
+		id_mandato varchar not null,
+		data_inicio date not null,
+		data_fim date not null,
+		uf varchar null,
+		primary key (id_parlamentar, id_mandato),
+		foreign key (id_parlamentar) references parlamentar(id_parlamentar));
 
 	CREATE TABLE materia( 
 		id_materia varchar primary key,
