@@ -35,6 +35,10 @@ def v_ranking():
 def materias():
     return flask.render_template('materia.html')
 
+@website.route('/materias/graficos/histo')
+def materias_histo():
+    return flask.render_template('materia_histo.html')
+
 @website.route('/parlamentares/ranking')
 def p_ranking():
 	res = list()
@@ -76,8 +80,13 @@ def json_materia():
 
 @website.route('/json-tipo')
 def json_tipo():
-    data = sts.tipo_voto()
-    return flask.jsonify(data)
+    info = sts.tipo_voto()
+    return flask.jsonify(info)
+
+@website.route('/json-materia-histo')
+def json_materia_votacao():
+    info = sts.votacao_materia()
+    return flask.jsonify(info)
 
 if __name__ == '__main__':
     website.run()

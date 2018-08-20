@@ -32,17 +32,23 @@ con.cursor().executescript('''
 		uf varchar null,
 		primary key (id_parlamentar, id_mandato),
 		foreign key (id_parlamentar) references parlamentar(id_parlamentar));
-
+	
 	CREATE TABLE materia( 
 		id_materia varchar primary key,
 		tipo varchar null,
-		autor varchar null,
 		numero integer null,
 		data_apresentacao date null,
 		ementa varchar null,
 		apelido varchar null,
 		status varchar null);
-	
+
+	CREATE TABLE autoria(
+		id_parlamentar varchar not null,
+		id_materia varchar not null,
+		primary key(id_parlamentar, id_materia),
+		foreign key(id_parlamentar) references parlamentar (id_parlametar)
+		foreign key(id_materia) references parlamentar (id_materia));
+
 	CREATE TABLE temas_materia(
 		id_materia varchar not null,
 		tema varchar not null,

@@ -39,11 +39,17 @@ def insert_materias(lista_materias):
 			numero = materia.find('numeromateria').text
 			data_apresentacao = materia.find('dataapresentacao').text
 			info = (id_materia, tipo, numero, data_apresentacao)
+			for parlamentar in materia.find_all('codigoparlamentar'):
+				try:
+					cursor.execute('''INSERT INTO autoria (id_parlamentar, id_materia) VALUES (?,?);''', (parlamentar.text, id_materia))
+				except sqlite3.IntegrityError:
+					pass
 
 			try:
 				cursor.execute('''INSERT INTO materia (id_materia, tipo, numero, data_apresentacao) VALUES (?,?,?,?);''', info)
 			except sqlite3.IntegrityError:
 				pass
+
 
 		conn.commit()
 
@@ -248,12 +254,6 @@ async def get_votacao(data_in, data_fim, session):
 	async with session.get(URL.format(data_in, data_fim)) as listas_votacoes:
 		listas_votacoes = BeautifulSoup(await listas_votacoes.text(), 'lxml')
 		return listas_votacoes
-
-# async def get_filiacao(parlamentar, session):
-# 	URL = 'http://legis.senado.leg.br/dadosabertos/senador/{}/filiacoes'
-# 	async with session.get(URL.format(parlamentar)) as filiacao:
-# 		filiacao = BeautifulSoup(await filiacao.text(), 'lxml')
-# 		return filiacao
 
 async def get_info_parlamentar(parlamentar, info, session):
 	URL = 'http://legis.senado.leg.br/dadosabertos/senador/{}/{}'

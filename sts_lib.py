@@ -185,13 +185,7 @@ def assertividade_parlamentar():
 	'''
  
 	res = cursor.execute(sql_command).fetchall()
-	for parlamentar in res:
-		if parlamentar[2]>=40:
-			parlamentares[parlamentar[0]] = "%.2f" %(parlamentar[1]*100/parlamentar[2])
-		
-		else:
-			parlamentares[parlamentar[0]] = 'NA'
-
+	parlamentares = {key[0]:'{:.2f}'.format(key[1]*100/key[2]) if key[2]>=40 else '-' for key in res}
 	sql_command = '''
 		SELECT nome 
 		FROM parlamentar'''
@@ -199,7 +193,7 @@ def assertividade_parlamentar():
 	res = cursor.execute(sql_command).fetchall()
 	for parlamentar in res:
 		if parlamentar[0] not in parlamentares.keys():
-			parlamentares[parlamentar[0]] = 'NA'
+			parlamentares[parlamentar[0]] = '-'
 
 	conn.close()
 	return parlamentares
@@ -297,7 +291,7 @@ def chinelinho(id_parlamentar, data_in = global_keys['DATA_INICIO'], data_fim = 
 def concordancia():
 	""" Calcula uma porcentagem relacionada ao número de vezes que o voto de um parlamentar 
 	concordou com o resultado de uma votação. Só leva em consideração votações ostensivas e parlamentares
-	que tenham mais de 40 votos. Caso contrário registra-se 'NA'.\n
+	que tenham mais de 40 votos. Caso contrário registra-se '-'.\n
 	Retorna uma lista de tuplas (parlamentar, porcentagem). """
 
 	conn = sql.connect("py_politica.db")
@@ -325,7 +319,7 @@ def concordancia():
 	res = cursor.execute(sql_command).fetchall()
 	for parlamentar in res:
 		if parlamentar[0] not in parlamentares.keys():
-			parlamentares[parlamentar[0]] = 'NA'
+			parlamentares[parlamentar[0]] = '-'
 
 	conn.close()
 	return parlamentares
@@ -381,7 +375,7 @@ def tipo_voto():
 	'''
 
 	res = cursor.execute(sql_command).fetchall()
-	res = [list(x) for x in res]
+	res = list(map(list, res))
 	for tipo in res:
 		if 'Presidente' in tipo[0]:
 			count += tipo[1]
@@ -395,3 +389,30 @@ def tipo_voto():
 	res.append(outros)
 	res = sorted(res, key=lambda res:res[1], reverse=True)
 	return res 
+
+def votacao_materia():
+	conn = sql.connect("py_politica.db")
+	cursor = conn.cursor()
+
+	sql_command = '''
+		SELECT qtd as num_v, count(*)
+		FROM   (SELECT id_materia, count(id_votacao) as qtd
+				FROM votacao NATURAL JOIN materia
+				GROUP BY id_materia)r
+		
+		GROUP BY qtd
+		ORDER BY qtd
+	'''
+
+	res = cursor.execute(sql_command).fetchall()
+	return res
+
+	# sql_command = '''
+	# 	select *
+	# 	from materia
+	# 	where id_materia not in 
+	# 	(select id_materia from votacao)'''
+
+	# res = cursor.execute(sql_command).fetchall()
+	# print(res)
+
