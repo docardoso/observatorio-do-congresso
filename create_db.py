@@ -21,17 +21,18 @@ con.cursor().executescript('''
 		data_filiacao date not null,
 		data_desfiliacao date null,
 		primary key(id_parlamentar, id_partido, data_filiacao),
-		foreign key(id_parlamentar) references parlamentar(id_parlamentar),
+		foreign key(id_parlamentar) references parlamentar(id_parlamentar) ON DELETE CASCADE,
 		foreign key(id_partido) references partido(id_partido));
 
 	CREATE TABLE mandato(
 		id_parlamentar varchar not null,
 		id_mandato varchar not null,
+		descricao varchar null,
 		data_inicio date not null,
 		data_fim date not null,
 		uf varchar null,
 		primary key (id_parlamentar, id_mandato),
-		foreign key (id_parlamentar) references parlamentar(id_parlamentar));
+		foreign key (id_parlamentar) references parlamentar(id_parlamentar) ON DELETE CASCADE);
 	
 	CREATE TABLE materia( 
 		id_materia varchar primary key,
@@ -46,7 +47,7 @@ con.cursor().executescript('''
 		id_parlamentar varchar not null,
 		id_materia varchar not null,
 		primary key(id_parlamentar, id_materia),
-		foreign key(id_parlamentar) references parlamentar (id_parlametar)
+		foreign key(id_parlamentar) references parlamentar (id_parlametar) ON DELETE CASCADE,
 		foreign key(id_materia) references parlamentar (id_materia));
 
 	CREATE TABLE temas_materia(
@@ -75,8 +76,8 @@ con.cursor().executescript('''
 		id_votacao varchar not null,
 		descricao integer not null,
 		primary key(id_parlamentar, id_votacao),
-		foreign key (id_votacao) references votacao(id_votacao),
-		foreign key (id_parlamentar) references parlamentar(id_parlamentar));
+		foreign key (id_parlamentar) references parlamentar(id_parlamentar) ON DELETE CASCADE,
+		foreign key (id_votacao) references votacao(id_votacao));
 		
 	CREATE TABLE estatisticas_votacao(
 		id_votacao varchar primary key,

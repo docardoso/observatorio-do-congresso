@@ -237,6 +237,8 @@ def totais_parlamentares():
 		GROUP BY id_parlamentar
 		ORDER BY id_parlamentar;
 	'''
+
+	mandatos = count_info('mandato')
 	total = cursor.execute(sql_command_total).fetchall()
 	valido = cursor.execute(sql_command_valido).fetchall()
 	ausencia = cursor.execute(sql_command_ausencia).fetchall()

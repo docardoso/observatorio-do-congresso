@@ -48,13 +48,14 @@ def p_ranking():
 	filiacao = sts.count_info('filiacao')
 	mandato = sts.count_info('mandato')
 	for parlamentar in total.keys():
+		filia = '{:.2f}'.format(filiacao[parlamentar]/mandato[parlamentar]) # Índice de troca de partido, n filiações/ n mandatos
 		res.append(
 			(parlamentar, 
 			assertividade[parlamentar], 
 			concordancia[parlamentar], 
 			total[parlamentar][0], 
 			total[parlamentar][1], 
-			filiacao[parlamentar],
+			filia,
 			mandato[parlamentar],
 			total[parlamentar][2], 
 			total[parlamentar][3])

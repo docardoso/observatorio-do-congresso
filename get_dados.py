@@ -23,6 +23,7 @@ def main():
 	loop.run_until_complete(async_info(parlamentares, 'filiacoes'))
 	loop.run_until_complete(async_info(parlamentares, 'mandatos'))
 	loop.close()
+	delete_suplente()
 	create_ranking_votacao()
 
 def get_text_alt(elem, tag, alt=None):
@@ -125,18 +126,30 @@ def insert_mandatos(lista_mandatos):
 		parlamentar = mandatos.find('codigoparlamentar').text
 		for mandato in mandatos.find_all('mandato'):
 			id_mandato = get_text_alt(mandato, 'codigomandato')
+			participacao = get_text_alt(mandato, 'descricaoparticipacao')
 			data_in = mandato.find('datainicio').text
 			data_fim = mandato.find('datafim').text
 			uf = mandato.find('ufparlamentar').text
-			info = (parlamentar, id_mandato, data_in, data_fim, uf)
+			info = (parlamentar, id_mandato, participacao, data_in, data_fim, uf)
 		
 			try:
-				cursor.execute('''INSERT INTO mandato (id_parlamentar, id_mandato, data_inicio, data_fim, uf) VALUES (?,?,?,?,?);''', info)
+				cursor.execute('''INSERT INTO mandato (id_parlamentar, id_mandato, descricao, data_inicio, data_fim, uf) VALUES (?,?,?,?,?,?);''', info)
 			
 			except sqlite3.IntegrityError:
 				pass
-					
+
 	conn.commit()
+
+def delete_suplente():
+	sql_command = '''
+		DELETE FROM parlamentar
+		WHERE id_parlamentar NOT IN (
+			SELECT DISTINCT id_parlamentar
+			FROM mandato
+			WHERE descricao = 'Titular')
+	'''
+
+	cursor.execute(sql_command)
 
 def create_ranking_votacao():
 	votacao_info = dict()
