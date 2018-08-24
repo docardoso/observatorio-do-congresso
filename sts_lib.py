@@ -238,7 +238,6 @@ def totais_parlamentares():
 		ORDER BY id_parlamentar;
 	'''
 
-	mandatos = count_info('mandato')
 	total = cursor.execute(sql_command_total).fetchall()
 	valido = cursor.execute(sql_command_valido).fetchall()
 	ausencia = cursor.execute(sql_command_ausencia).fetchall()
@@ -418,3 +417,40 @@ def votacao_materia():
 	# res = cursor.execute(sql_command).fetchall()
 	# print(res)
 
+def autoria():
+	conn = sql.connect("py_politica.db")
+	cursor = conn.cursor()
+
+	sql_command = '''
+		select nome, count(*) 
+		from parlamentar NATURAL JOIN autoria 
+		GROUP by id_parlamentar 
+	'''
+
+	res = cursor.execute(sql_command).fetchall()
+	parlamentares = {parlamentar[0]:[parlamentar[1],0] for parlamentar in res}
+
+	sql_command = '''
+		select nome, count(*) 
+		from parlamentar NATURAL JOIN autoria 
+		where id_materia in 
+			(SELECT id_materia from votacao)
+		GROUP by id_parlamentar 
+	'''
+	res = cursor.execute(sql_command).fetchall()
+	for parlamentar in res:
+		parlamentares[parlamentar[0]].pop(1)
+		parlamentares[parlamentar[0]].insert(1, parlamentar[1])
+
+	sql_command = '''
+		select nome
+		from parlamentar
+		where id_parlamentar not in 
+			(select id_parlamentar 
+			from autoria)
+	'''
+	res = cursor.execute(sql_command).fetchall()
+	for parlamentar in res:
+		parlamentares[parlamentar[0]] = [0,0]
+
+	return parlamentares

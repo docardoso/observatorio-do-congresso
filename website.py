@@ -45,6 +45,7 @@ def p_ranking():
 	assertividade = sts.assertividade_parlamentar()
 	total = sts.totais_parlamentares()
 	concordancia = sts.concordancia()
+	autoria = sts.autoria()
 	filiacao = sts.count_info('filiacao')
 	mandato = sts.count_info('mandato')
 	for parlamentar in total.keys():
@@ -55,6 +56,8 @@ def p_ranking():
 			concordancia[parlamentar], 
 			total[parlamentar][0], 
 			total[parlamentar][1], 
+			autoria[parlamentar][0],
+			autoria[parlamentar][1],
 			filia,
 			mandato[parlamentar],
 			total[parlamentar][2], 
