@@ -39,22 +39,21 @@ con.cursor().executescript('''
 		tipo varchar null,
 		numero integer null,
 		data_apresentacao date null,
+		natureza varchar null,
+		assunto_geral varchar null,
+		assunto_especifico varchar null,
 		ementa varchar null,
 		apelido varchar null,
 		status varchar null);
 
 	CREATE TABLE autoria(
-		id_parlamentar varchar not null,
+		tipo_autor varchar not null,
 		id_materia varchar not null,
-		primary key(id_parlamentar, id_materia),
+		autor varchar null,
+		id_parlamentar varchar null,
+		primary key(tipo_autor, id_materia),
 		foreign key(id_parlamentar) references parlamentar (id_parlametar) ON DELETE CASCADE,
 		foreign key(id_materia) references parlamentar (id_materia));
-
-	CREATE TABLE temas_materia(
-		id_materia varchar not null,
-		tema varchar not null,
-		primary key (id_materia, tema),
-		foreign key (id_materia) references materia (id_materia));
 	
 	CREATE TABLE votacao( 
 		id_votacao varchar primary key,

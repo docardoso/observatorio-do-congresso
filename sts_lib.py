@@ -406,16 +406,25 @@ def votacao_materia():
 	'''
 
 	res = cursor.execute(sql_command).fetchall()
-	return res
 
 	# sql_command = '''
-	# 	select *
-	# 	from materia
-	# 	where id_materia not in 
-	# 	(select id_materia from votacao)'''
+	# 	SELECT qtd - q
+	# 	FROM 
+	# 		(SELECT count(*) as q
+	# 		FROM materia
+	# 		WHERE id_materia IN 
+	# 			(SELECT id_materia 
+	# 			FROM votacao))r
+	# 	NATURAL JOIN 
+	# 		(SELECT count(*) as qtd
+	# 		FROM materia)s'''
 
-	# res = cursor.execute(sql_command).fetchall()
-	# print(res)
+	# res2 = cursor.execute(sql_command).fetchone()
+	# res.append((0,res2[0]))
+	# res.sort()
+	
+	return res
+
 
 def autoria():
 	conn = sql.connect("py_politica.db")

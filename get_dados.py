@@ -16,22 +16,126 @@ tempo_atual = time.localtime() # Data corrente
 
 def main():
 	loop = asy.get_event_loop()
+	get_partidos()
 	loop.run_until_complete(async_materia())
 	loop.run_until_complete(async_votacao())
-	get_partidos()
 	parlamentares = cursor.execute('''SELECT id_parlamentar FROM parlamentar''').fetchall()
 	loop.run_until_complete(async_info(parlamentares, 'filiacoes'))
 	loop.run_until_complete(async_info(parlamentares, 'mandatos'))
+	del parlamentares
+	# materias = cursor.execute('SELECT id_materia FROM materia').fetchall()
+	# loop.run_until_complete(async_assunto(materias))
 	loop.close()
 	delete_suplente()
 	create_ranking_votacao()
 
+# Função auxiliar:
 def get_text_alt(elem, tag, alt=None):
 	try:
 		return elem.find(tag).text
 	except AttributeError:
 		return alt
 
+# Asyncs Principais:
+async def async_materia():
+	async with aio.ClientSession(trust_env = True) as session:
+		materias = [get_materia(ano, session) for ano in range(2010, tempo_atual[0]+1)]
+		materias = await asy.gather(*materias)
+		insert_materias(materias)
+
+async def async_votacao():
+	votacoes = list()
+	connector = aio.TCPConnector(limit=10)
+	timeout = aio.ClientTimeout(total=60*60)
+	async with aio.ClientSession(trust_env=True, timeout=timeout, connector=connector) as session:
+		for ano in range(2010,tempo_atual[0]+1):
+			for mes in range(1,12):
+				data_in ='{}{:02d}02'.format(ano,mes)
+				data_fim = '{}{:02d}01'.format(ano,mes+1)
+				votacoes.append(get_votacao(data_in, data_fim, session))
+		
+		votacoes = await asy.gather(*votacoes)
+		insert_votacao(votacoes)
+
+async def async_info(parlamentares, info):
+	connector = aio.TCPConnector(limit=10)
+	timeout = aio.ClientTimeout(total=60*60)
+	async with aio.ClientSession(trust_env=True, timeout=timeout, connector=connector) as session:
+		res = [get_info_parlamentar(parlamentar[0], info, session) for parlamentar in parlamentares]
+		res = await asy.gather(*res)
+		if info == 'filiacoes':
+			insert_filiacao(res)
+		
+		elif info == 'mandatos':
+			insert_mandatos(res)
+
+async def async_assunto(lista_materia):
+	connector = aio.TCPConnector(limit=10)
+	timeout = aio.ClientTimeout(total=60*60)
+	async with aio.ClientSession(trust_env=True, timeout=timeout, connector=connector) as session:
+		assunto = [get_assunto(materia[0], session) for materia in lista_materia]
+		assunto = await asy.gather(*assunto)
+		insert_assunto(assunto)
+
+# Função de recolhimento de dados da API e inserção de informações no BD
+def get_partidos():
+	URL = 'http://legis.senado.leg.br/dadosabertos/senador/partidos'
+	req = requests.get(URL).text
+	partidos = BeautifulSoup(req, 'lxml')
+	for partido in partidos.find_all('partido'):
+		id_partido = partido.find('codigo').text
+		sigla = partido.find('sigla').text
+		nome = partido.find('nome').text
+		data_criacao = partido.find('datacriacao').text
+		info = (id_partido, sigla, nome, data_criacao)
+		
+		try:
+			cursor.execute('''INSERT INTO partido (id_partido, sigla, nome, data_criacao) VALUES (?,?,?,?);''', info)
+		except sqlite3.IntegrityError:
+			pass
+			
+	conn.commit()
+	
+# Funções async de recolhimento de dados da API
+async def get_materia(ano, session):
+	URL = 'http://legis.senado.leg.br/dadosabertos/materia/pesquisa/lista?ano={}'
+	async with session.get(URL.format(ano)) as materias:
+		materias = BeautifulSoup(await materias.text(), 'lxml')
+		return materias
+
+async def get_votacao(data_in, data_fim, session):
+	URL = 'http://legis.senado.leg.br/dadosabertos/plenario/lista/votacao/{}/{}'
+	async with session.get(URL.format(data_in, data_fim)) as listas_votacoes:
+		listas_votacoes = BeautifulSoup(await listas_votacoes.text(), 'lxml')
+		return listas_votacoes
+
+async def get_info_parlamentar(parlamentar, info, session):
+	URL = 'http://legis.senado.leg.br/dadosabertos/senador/{}/{}'
+	async with session.get(URL.format(parlamentar, info)) as info:
+		info = BeautifulSoup(await info.text(), 'lxml')
+		return info
+
+async def get_assunto(materia, session):
+	URL = 'http://legis.senado.leg.br/dadosabertos/materia/{}'
+	async with session.get(URL.format(materia)) as assunto:
+		assunto = BeautifulSoup(await assunto.text(), 'lxml')
+		assunto_g = assunto.find('assuntogeral')
+		assunto_e = assunto.find('assuntoespecifico')
+		try:
+			assunto_g = assunto_g.find('descricao').text
+
+		except:
+			assunto_g = None
+
+		try:
+			assunto_e = assunto_e.find('descricao').text
+
+		except:
+			assunto_e = None
+
+		return (materia, assunto_g, assunto_e)
+
+# Funções de Seleção de informações e inserção no BD
 def insert_materias(lista_materias):
 	for materias in lista_materias:
 		for materia in materias.find_all('materia'):
@@ -39,17 +143,34 @@ def insert_materias(lista_materias):
 			tipo = materia.find('siglasubtipomateria').text
 			numero = materia.find('numeromateria').text
 			data_apresentacao = materia.find('dataapresentacao').text
-			info = (id_materia, tipo, numero, data_apresentacao)
-			for parlamentar in materia.find_all('codigoparlamentar'):
-				try:
-					cursor.execute('''INSERT INTO autoria (id_parlamentar, id_materia) VALUES (?,?);''', (parlamentar.text, id_materia))
-				except sqlite3.IntegrityError:
-					pass
+			natureza = get_text_alt(materia, 'nomenatureza')
+			# req = requests.get('http://legis.senado.leg.br/dadosabertos/materia/{}'.format(id_materia)).text
+			# req = BeautifulSoup(req, 'lxml')
+			# assunto_g = req.find('assuntogeral')
+			# assunto_e = req.find('assuntoespecifico')
+			# try:
+			# 	assunto_g = assunto_g.find('descricao').text
+			# 	assunto_e = assunto_e.find('descricao').text
 
+			# except:
+			# 	assunto_g = None
+			# 	assunto_e = None
+
+			info = (id_materia, tipo, numero, data_apresentacao, natureza)
 			try:
-				cursor.execute('''INSERT INTO materia (id_materia, tipo, numero, data_apresentacao) VALUES (?,?,?,?);''', info)
+				cursor.execute('''INSERT INTO materia (id_materia, tipo, numero, data_apresentacao, natureza) VALUES (?,?,?,?,?);''', info)
 			except sqlite3.IntegrityError:
 				pass
+
+			for autor in materia.find_all('autorprincipal'):
+				nome_autor = get_text_alt(autor, 'nomeautor')
+				tipo_autor = autor.find('siglatipoautor').text
+				parlamentar = get_text_alt(autor, 'codigoparlamentar')
+				info_autor = (tipo_autor, id_materia, nome_autor, parlamentar)
+				try:
+					cursor.execute('''INSERT INTO autoria (tipo_autor, id_materia, autor, id_parlamentar) VALUES (?,?,?,?);''', info_autor)
+				except sqlite3.IntegrityError:
+					pass
 
 
 		conn.commit()
@@ -116,7 +237,6 @@ def insert_filiacao(lista_filiacoes):
 			
 			except sqlite3.IntegrityError:
 				pass
-
 		
 	conn.commit()
 
@@ -140,6 +260,17 @@ def insert_mandatos(lista_mandatos):
 
 	conn.commit()
 
+def insert_assunto(list_assuntos):
+	for assunto in list_assuntos:
+		try:
+			cursor.execute('''
+				UPDATE materia 
+				SET assunto_geral = {}, assunto_especifico = {}
+				WHERE id_materia = {}'''.format(assunto[1], assunto[2], assunto[0]))
+		except sqlite3.IntegrityError:
+			pass
+
+#Outras Funções de manipulação do BD
 def delete_suplente():
 	sql_command = '''
 		DELETE FROM parlamentar
@@ -237,74 +368,5 @@ def create_ranking_votacao():
 		cursor.execute(sql_command.format(total_sim, total_nao, total_abs, indice_equilibrio, comp_r, comp_s, entropia, info))
 
 	conn.commit()
-				
-def get_partidos():
-	URL = 'http://legis.senado.leg.br/dadosabertos/senador/partidos'
-	req = requests.get(URL).text
-	partidos = BeautifulSoup(req, 'lxml')
-	for partido in partidos.find_all('partido'):
-		id_partido = partido.find('codigo').text
-		sigla = partido.find('sigla').text
-		nome = partido.find('nome').text
-		data_criacao = partido.find('datacriacao').text
-		info = (id_partido, sigla, nome, data_criacao)
-		
-		try:
-			cursor.execute('''INSERT INTO partido (id_partido, sigla, nome, data_criacao) VALUES (?,?,?,?);''', info)
-		except sqlite3.IntegrityError:
-			pass
-			
-	conn.commit()
-
-async def get_materia(ano, session):
-	URL = 'http://legis.senado.leg.br/dadosabertos/materia/pesquisa/lista?ano={}'
-	async with session.get(URL.format(ano)) as materias:
-		materias = BeautifulSoup(await materias.text(), 'lxml')
-		return materias
-
-async def get_votacao(data_in, data_fim, session):
-	URL = 'http://legis.senado.leg.br/dadosabertos/plenario/lista/votacao/{}/{}'
-	async with session.get(URL.format(data_in, data_fim)) as listas_votacoes:
-		listas_votacoes = BeautifulSoup(await listas_votacoes.text(), 'lxml')
-		return listas_votacoes
-
-async def get_info_parlamentar(parlamentar, info, session):
-	URL = 'http://legis.senado.leg.br/dadosabertos/senador/{}/{}'
-	async with session.get(URL.format(parlamentar, info)) as info:
-		info = BeautifulSoup(await info.text(), 'lxml')
-		return info
-
-async def async_materia():
-	async with aio.ClientSession(trust_env = True) as session:
-		materias = [get_materia(ano, session) for ano in range(2010, tempo_atual[0]+1)]
-		materias = await asy.gather(*materias)
-		insert_materias(materias)
-
-async def async_votacao():
-	votacoes = list()
-	connector = aio.TCPConnector(limit=10)
-	timeout = aio.ClientTimeout(total=60*60)
-	async with aio.ClientSession(trust_env=True, timeout=timeout, connector=connector) as session:
-		for ano in range(2010,tempo_atual[0]+1):
-			for mes in range(1,12):
-				data_in ='{}{:02d}02'.format(ano,mes)
-				data_fim = '{}{:02d}01'.format(ano,mes+1)
-				votacoes.append(get_votacao(data_in, data_fim, session))
-		
-		votacoes = await asy.gather(*votacoes)
-		insert_votacao(votacoes)
-
-
-async def async_info(parlamentares, info):
-	connector = aio.TCPConnector(limit=10)
-	timeout = aio.ClientTimeout(total=60*60)
-	async with aio.ClientSession(trust_env=True, timeout=timeout, connector=connector) as session:
-		res = [get_info_parlamentar(parlamentar[0], info, session) for parlamentar in parlamentares]
-		res = await asy.gather(*res)
-		if info == 'filiacoes':
-			insert_filiacao(res)
-		
-		elif info == 'mandatos':
-			insert_mandatos(res)
 
 main()
