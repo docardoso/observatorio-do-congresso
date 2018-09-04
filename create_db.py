@@ -41,10 +41,13 @@ con.cursor().executescript('''
 		data_apresentacao date null,
 		natureza varchar null,
 		assunto_geral varchar null,
-		assunto_especifico varchar null,
-		ementa varchar null,
-		apelido varchar null,
-		status varchar null);
+		assunto_especifico varchar null);
+
+	CREATE TABLE index_materia(
+		id_materia varchar not null,
+		indice varchar not null,
+		primary key (id_materia, indice),
+		foreign key (id_materia) references materia (id_materia	));
 
 	CREATE TABLE autoria(
 		tipo_autor varchar not null,

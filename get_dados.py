@@ -8,6 +8,7 @@ import time
 import requests
 import scipy.stats as sct
 import sts_lib as sts
+import re
 
 conn = sqlite3.connect("py_politica.db") # Conexão com o BD;
 cursor = conn.cursor() # Criação de um cursor para realizar operações no BD;
@@ -18,13 +19,13 @@ def main():
 	loop = asy.get_event_loop()
 	get_partidos()
 	loop.run_until_complete(async_materia())
-	loop.run_until_complete(async_votacao())
-	parlamentares = cursor.execute('''SELECT id_parlamentar FROM parlamentar''').fetchall()
-	loop.run_until_complete(async_info(parlamentares, 'filiacoes'))
-	loop.run_until_complete(async_info(parlamentares, 'mandatos'))
-	del parlamentares
-	# materias = cursor.execute('SELECT id_materia FROM materia').fetchall()
-	# loop.run_until_complete(async_assunto(materias))
+	# loop.run_until_complete(async_votacao())
+	# parlamentares = cursor.execute('''SELECT id_parlamentar FROM parlamentar''').fetchall()
+	# loop.run_until_complete(async_info(parlamentares, 'filiacoes'))
+	# loop.run_until_complete(async_info(parlamentares, 'mandatos'))
+	# del parlamentares
+	materias = cursor.execute('SELECT id_materia FROM materia').fetchall()
+	loop.run_until_complete(async_assunto(materias))
 	loop.close()
 	delete_suplente()
 	create_ranking_votacao()
@@ -144,24 +145,25 @@ def insert_materias(lista_materias):
 			numero = materia.find('numeromateria').text
 			data_apresentacao = materia.find('dataapresentacao').text
 			natureza = get_text_alt(materia, 'nomenatureza')
-			# req = requests.get('http://legis.senado.leg.br/dadosabertos/materia/{}'.format(id_materia)).text
-			# req = BeautifulSoup(req, 'lxml')
-			# assunto_g = req.find('assuntogeral')
-			# assunto_e = req.find('assuntoespecifico')
-			# try:
-			# 	assunto_g = assunto_g.find('descricao').text
-			# 	assunto_e = assunto_e.find('descricao').text
-
-			# except:
-			# 	assunto_g = None
-			# 	assunto_e = None
-
+			index = get_text_alt(materia, 'indexacaomateria')
 			info = (id_materia, tipo, numero, data_apresentacao, natureza)
 			try:
 				cursor.execute('''INSERT INTO materia (id_materia, tipo, numero, data_apresentacao, natureza) VALUES (?,?,?,?,?);''', info)
 			except sqlite3.IntegrityError:
 				pass
 
+			try:
+				p = re.compile(r'[^\w, ]')
+				index = p.sub('', index).split(', ')
+				for i in index:
+					try:
+						cursor.execute('''INSERT INTO index_materia (id_materia, indice) VALUES (?,?);''', (id_materia, i))
+					except sqlite3.IntegrityError:
+						pass
+			
+			except TypeError:
+				pass
+			
 			for autor in materia.find_all('autorprincipal'):
 				nome_autor = get_text_alt(autor, 'nomeautor')
 				tipo_autor = autor.find('siglatipoautor').text
@@ -265,8 +267,8 @@ def insert_assunto(list_assuntos):
 		try:
 			cursor.execute('''
 				UPDATE materia 
-				SET assunto_geral = {}, assunto_especifico = {}
-				WHERE id_materia = {}'''.format(assunto[1], assunto[2], assunto[0]))
+				SET assunto_geral = '{}', assunto_especifico = '{}'
+				WHERE id_materia = '{}' '''.format(assunto[1], assunto[2], assunto[0]))
 		except sqlite3.IntegrityError:
 			pass
 

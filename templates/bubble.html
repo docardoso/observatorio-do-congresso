@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% block title %} Gráfico de votações/dia {% endblock %}
+{% block head %}
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+	<script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+	<script src="https://code.highcharts.com/highcharts.js"></script>
+	<script src="https://code.highcharts.com/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/modules/export-data.js"></script>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <script>
+        var data = '/json-materia-bubble'
+        $.getJSON(
+            data,
+            function (data) {
+                Highcharts.chart('container', {
+                    chart: {
+                        type: 'bubble',
+                        plotBorderWidth: 1,
+                        zoomType: 'xy'
+                    },
+
+                    legend: {
+                        enabled: false
+                    },
+
+                    title: {
+                        text: 'Sugar and fat intake per country'
+                    },
+
+                    subtitle: {
+                        text: 'Source: <a href="http://www.euromonitor.com/">Euromonitor</a> and <a href="https://data.oecd.org/">OECD</a>'
+                    },
+
+                    xAxis: {
+                        gridLineWidth: 1,
+                        title: {
+                            text: 'Matérias propostas'
+                        },
+                        labels: {
+                            format: '{value}'
+                        },
+                        // plotLines: [{
+                        //     color: 'black',
+                        //     dashStyle: 'dot',
+                        //     width: 2,
+                        //     value: 65,
+                        //     label: {
+                        //         rotation: 0,
+                        //         y: 15,
+                        //         style: {
+                        //             fontStyle: 'italic'
+                        //         },
+                        //         text: 'Safe fat intake 65g/day'
+                        //     },
+                        //     zIndex: 3
+                        // }]
+                    },
+
+                    yAxis: {
+                        startOnTick: false,
+                        endOnTick: false,
+                        title: {
+                            text: 'Votações'
+                        },
+                        labels: {
+                            format: '{value}'
+                        },
+                        maxPadding: 0.2,
+                        // plotLines: [{
+                        //     color: 'black',
+                        //     dashStyle: 'dot',
+                        //     width: 2,
+                        //     value: 50,
+                        //     label: {
+                        //         align: 'right',
+                        //         style: {
+                        //             fontStyle: 'italic'
+                        //         },
+                        //         text: 'Safe sugar intake 50g/day',
+                        //         x: -10
+                        //     },
+                        //     zIndex: 3
+                        // }]
+                    },
+
+                    tooltip: {
+                        useHTML: true,
+                        headerFormat: '<table>',
+                        pointFormat: '<tr><th colspan="2"><h6>{point.name}</h6></th></tr>' +
+                            '<tr><th>Matérias propostas:</th><td>{point.x}</td></tr>' +
+                            '<tr><th>Votações:</th><td>{point.y}</td></tr>' +
+                            '<tr><th>Abstenções (média):</th><td>{point.z}</td></tr>',
+                        footerFormat: '</table>',
+                        followPointer: true
+                    },
+
+                    plotOptions: {
+                        series: {
+                            dataLabels: {
+                                enabled: true,
+                                format: '{point.name}'
+                            }
+                        }
+                    },
+
+                    series: [{
+                        data: data
+                    }]
+
+                });
+            });
+    </script>
+{% endblock %}
+
+{% block content %}
+	<div id="container" style="min-width: 310px; height: 800px; margin: 0 auto"></div>
+{% endblock %}

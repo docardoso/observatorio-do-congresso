@@ -244,16 +244,13 @@ def totais_parlamentares():
 	justificada = cursor.execute(sql_command_justificada).fetchall()
 	parlamentares = {parlamentar[0]:[parlamentar[1],0,0,0] for parlamentar in total}
 	for parlamentar in valido:
-		parlamentares[parlamentar[0]].pop(1)
-		parlamentares[parlamentar[0]].insert(1,parlamentar[1])
+		parlamentares[parlamentar[0]][1] = parlamentar[1]
 	
 	for parlamentar in ausencia:
-		parlamentares[parlamentar[0]].pop(2)
-		parlamentares[parlamentar[0]].insert(2,parlamentar[1])	
+		parlamentares[parlamentar[0]][2] = parlamentar[1]
 
 	for parlamentar in justificada:
-		parlamentares[parlamentar[0]].pop(3)
-		parlamentares[parlamentar[0]].insert(3,parlamentar[1])	
+		parlamentares[parlamentar[0]][3] = parlamentar[1]
 
 	conn.close()
 	return parlamentares
@@ -406,23 +403,6 @@ def votacao_materia():
 	'''
 
 	res = cursor.execute(sql_command).fetchall()
-
-	# sql_command = '''
-	# 	SELECT qtd - q
-	# 	FROM 
-	# 		(SELECT count(*) as q
-	# 		FROM materia
-	# 		WHERE id_materia IN 
-	# 			(SELECT id_materia 
-	# 			FROM votacao))r
-	# 	NATURAL JOIN 
-	# 		(SELECT count(*) as qtd
-	# 		FROM materia)s'''
-
-	# res2 = cursor.execute(sql_command).fetchone()
-	# res.append((0,res2[0]))
-	# res.sort()
-	
 	return res
 
 
@@ -448,8 +428,7 @@ def autoria():
 	'''
 	res = cursor.execute(sql_command).fetchall()
 	for parlamentar in res:
-		parlamentares[parlamentar[0]].pop(1)
-		parlamentares[parlamentar[0]].insert(1, parlamentar[1])
+		parlamentares[parlamentar[0]][1] = parlamentar[1]
 
 	sql_command = '''
 		select nome
@@ -463,3 +442,59 @@ def autoria():
 		parlamentares[parlamentar[0]] = [0,0]
 
 	return parlamentares
+
+def bubble_chart():
+	conn = sql.connect('py_politica.db')
+	cursor = conn.cursor()
+	list_return = list()
+
+	sql_command = '''
+		select assunto_geral, count(*)
+		from materia
+		group by assunto_geral
+		order by count(*) desc
+	'''
+
+	res = cursor.execute(sql_command).fetchall()
+	temas = {tema[0]:[tema[1],0,0] for tema in res}
+
+	sql_command = '''
+		select assunto_geral, count(*)
+		from materia
+		where id_materia in (select id_materia from votacao)
+		group by assunto_geral
+		order by count(*) desc
+	'''
+
+	res = cursor.execute(sql_command).fetchall()
+	for tema in res:
+		temas[tema[0]][1] = tema[1]
+
+	sql_command = '''
+		select assunto_geral, avg(abs_media)
+		from materia natural join (
+		select id_materia, avg(qtd) abs_media
+		from votacao natural join (
+			select id_votacao, count(*) as qtd
+			from voto
+			where descricao = "P-NRV" or descricao = "Absteção"
+			group by id_votacao)r
+			
+		group by id_materia
+		)s
+		group by assunto_geral
+		order by avg(abs_media) 
+	'''
+
+	res = cursor.execute(sql_command).fetchall()
+	for tema in res:
+		temas[tema[0]][2] = tema[1]
+
+	for k in temas.keys():
+		#if k is None:
+		#	continue
+
+		tema = {'x': temas[k][0], 'y': temas[k][1], 'z': temas[k][2], 'name': k}
+		list_return.append(tema)
+	
+	return list_return

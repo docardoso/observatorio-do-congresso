@@ -70,6 +70,10 @@ def p_ranking():
 def tipo():
     return flask.render_template('tipovoto.html')
 
+@website.route('/materia/bubble')
+def bubble():
+    return flask.render_template('bubble.html')
+
 @website.route('/json')
 def json():
     data = sts.votacoes_periodo()
@@ -90,6 +94,11 @@ def json_tipo():
 @website.route('/json-materia-histo')
 def json_materia_votacao():
     info = sts.votacao_materia()
+    return flask.jsonify(info)
+
+@website.route('/json-materia-bubble')
+def json_materia_bubble():
+    info = sts.bubble_chart()
     return flask.jsonify(info)
 
 if __name__ == '__main__':
