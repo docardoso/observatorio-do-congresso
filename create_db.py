@@ -1,9 +1,12 @@
-'''Versão 1.1.1'''
+import asyncio as asy
+import async_lib as asl
+import get_dados as gd
 import sqlite3 as sql
 
-con = sql.connect('py_politica.db')
+conn = sql.connect("py_politica.db") # Conexão com o BD;
+cursor = conn.cursor() # Criação de um cursor para realizar 
 
-con.cursor().executescript('''
+cursor.executescript('''
 	CREATE TABLE partido( 
 		id_partido varchar primary key,
 		sigla varchar not null,
@@ -92,5 +95,23 @@ con.cursor().executescript('''
 		entropia real null,
 		foreign key (id_votacao) references votacao (id_votacao));''')
 
-con.commit()
-con.close()
+conn.commit()
+
+
+
+loop = asy.get_event_loop()
+loop.run_until_complete(asl.async_materia())
+loop.run_until_complete(asl.async_votacao())
+parlamentares = cursor.execute('''SELECT id_parlamentar FROM parlamentar''').fetchall()
+loop.run_until_complete(asl.async_info(parlamentares, 'filiacoes'))
+loop.run_until_complete(asl.async_info(parlamentares, 'mandatos'))
+materias = cursor.execute('SELECT id_materia FROM materia').fetchall()
+loop.run_until_complete(asl.async_assunto(materias))
+loop.close()
+
+gd.insert_partidos()
+gd.delete_suplente()
+gd.insert_est_votacao()
+gd.insert_est_votacao_secreta()
+
+conn.close()

@@ -1,4 +1,6 @@
-import sts_lib as sts
+import utility as ut
+import votacao as vt
+import parlamentar as pl
 import flask
 import numpy as np
 import sqlite3 as sql
@@ -7,15 +9,15 @@ website = flask.Flask(__name__)
 website.config['DEBUG'] = True
 
 @website.route('/', methods=["GET", "POST"])
-def main():
+def main_page():
     return flask.render_template("main.html")
 
-@website.route('/votacoes/grafico1')
-def votacoes():
-    return flask.render_template('index.html')
+@website.route('/votacoes/grafvotacaodia')
+def graf_votacao_dia():
+    return flask.render_template('graf_votacao_dia.html')
 
 @website.route('/votacoes/ranking')
-def v_ranking():
+def ranking_votacao():
 	conn = sql.connect("py_politica.db")
 	cursor = conn.cursor()
 	sql_command = '''
@@ -26,80 +28,66 @@ def v_ranking():
 	res = cursor.execute(sql_command).fetchall()
 	for i,r in enumerate(res):
 		r = list(r)
-		r[0] = sts.converte_id_votacao(r[0])
+		r[0] = ut.converte_id_votacao(r[0])
 		res[i] = r
 
-	return flask.render_template('VRanking.html', ast=res)
+	return flask.render_template('tab_votacao.html', ast=res)
 
-@website.route('/materias/graficos')
-def materias():
-    return flask.render_template('materia.html')
+@website.route('/materias/grafmateriadia')
+def graf_materias_dia():
+    return flask.render_template('graf_materia_dia.html')
 
-@website.route('/materias/graficos/histo')
-def materias_histo():
-    return flask.render_template('materia_histo.html')
 
 @website.route('/parlamentares/ranking')
-def p_ranking():
-	res = list()
-	assertividade = sts.assertividade_parlamentar()
-	total = sts.totais_parlamentares()
-	concordancia = sts.concordancia()
-	autoria = sts.autoria()
-	filiacao = sts.count_info('filiacao')
-	mandato = sts.count_info('mandato')
-	for parlamentar in total.keys():
-		filia = '{:.2f}'.format(filiacao[parlamentar]/mandato[parlamentar]) # Índice de troca de partido, n filiações/ n mandatos
-		res.append(
-			(parlamentar, 
-			assertividade[parlamentar], 
-			concordancia[parlamentar], 
-			total[parlamentar][0], 
-			total[parlamentar][1], 
-			autoria[parlamentar][0],
-			autoria[parlamentar][1],
-			filia,
-			mandato[parlamentar],
-			total[parlamentar][2], 
-			total[parlamentar][3])
-			)
+def ranking_parlamentar():
 
-	return flask.render_template('Pranking.html', ast=res)
+	assertividade = pl.assertividade_parlamentar()
+	i_concordancia = pl.indice_concordancia()
+	total_votos = ut.sql_dict(ut.sql_command_total)
+	total_validos = ut.sql_dict(ut.sql_command_valido)
+	mat_prop = pl.n_mat_propostas(False)
+	mat_prop_vt = pl.n_mat_propostas()
+	i_trocas = pl.indice_trocas()
+	mandato = pl.count_info('mandato')
+	total_ausencias = ut.sql_dict(ut.sql_command_ausencia)
+	total_ausencias_jus = ut.sql_dict(ut.sql_command_justificada)
 
-@website.route('/votacoes/grafico2')
-def tipo():
-    return flask.render_template('tipovoto.html')
+	dicts = [assertividade, i_concordancia, total_votos, total_validos, mat_prop, 
+			mat_prop_vt, i_trocas, mandato, total_ausencias, total_ausencias_jus]
 
-@website.route('/materia/bubble')
-def bubble():
-    return flask.render_template('bubble.html')
+	res = {k:[ dic.get(k, '-') for dic in dicts] for k in pl.get_nome()}
 
-@website.route('/json')
-def json():
-    data = sts.votacoes_periodo()
-    data = [[sts.converte_data(x[0])*10**3,x[1]] for x in data]        
+	return flask.render_template('tab_parlamentar.html', res=res)
+
+@website.route('/votacoes/graftipofreq')
+def graf_tipo_freq():
+    return flask.render_template('graf_voto_freq.html')
+
+# @website.route('/materia/bubble')
+# def bubble():
+#     return flask.render_template('bubble.html')
+
+@website.route('/json-votacaodia')
+def json_votacao_dia():
+    data = vt.info_periodo(('votacao', 'dataHoraInicio'))
+    data = [[ut.converte_data(x[0]),x[1]] for x in data]        
     return flask.jsonify(data)
 
-@website.route('/json-materia')
-def json_materia():
-    data = sts.materias_periodo('M')
-    data = [[sts.converte_data(x[0]+'-01')*10**3,x[1]] for x in data]        
+@website.route('/json-materiadia')
+def json_materia_dia():
+    data = vt.info_periodo(('materia', 'data_apresentacao'))
+    data = [[ut.converte_data(x[0]) ,x[1]] for x in data]        
     return flask.jsonify(data)
 
-@website.route('/json-tipo')
-def json_tipo():
-    info = sts.tipo_voto()
+@website.route('/json-tipofreq')
+def json_tipo_freq():
+    info = vt.tipo_voto()
     return flask.jsonify(info)
 
-@website.route('/json-materia-histo')
-def json_materia_votacao():
-    info = sts.votacao_materia()
-    return flask.jsonify(info)
-
-@website.route('/json-materia-bubble')
-def json_materia_bubble():
-    info = sts.bubble_chart()
-    return flask.jsonify(info)
+# @website.route('/json-materia-bubble')
+# def json_materia_bubble():
+#     info = sts.bubble_chart()
+#     return flask.jsonify(info)
 
 if __name__ == '__main__':
     website.run()

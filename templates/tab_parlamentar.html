@@ -4,6 +4,8 @@
 {% block head %}
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" integrity="sha384-WskhaSGFgHYWDcbwN70/dfYBj47jz9qbsMId/iRN3ewGhXQFZCSftd1LZCfmhktB" crossorigin="anonymous">
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.1.1/css/bootstrap.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.19/css/dataTables.bootstrap4.min.css">
     <script src="https://code.jquery.com/jquery-3.3.1.js" integrity="sha256-2Kok7MbOyxpgUVvAk/HJ2jigOSYS2auK4Pfzbm7uH60=" crossorigin="anonymous"></script>  
     <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.js"></script>
 
@@ -12,11 +14,13 @@
             $('#Fancy').DataTable();
         });
     </script>
+    
+
 {% endblock %}
 
 {% block content %}
     <div class="Container mt-3">
-        <table id="Fancy", class="Display", style="width: 85%">
+        <table id="Fancy", class="table table-hover table-striped table-bordered", style="width: 85%">
             <thead>
                 <tt class="row">Ranking dos Parlamentares</tt>
                 <tr>
@@ -35,19 +39,14 @@
                 </tr>
             </thead>
             <tbody>
-                {% for elemento in ast %}
+                {% for elemento in res %}
                 <tr>
-                    <td>{{ elemento[0] }}</td>
-                    <td>{{ elemento[1] }}</td>
-                    <td>{{ elemento[2] }}</td>
-                    <td>{{ elemento[3] }}</td>
-                    <td>{{ elemento[4] }}</td>
-                    <td>{{ elemento[5] }}</td>
-                    <td>{{ elemento[6] }}</td>
-                    <td>{{ elemento[7] }}</td>
-                    <td>{{ elemento[8] }}</td>
-                    <td>{{ elemento[9] }}</td>
-                    <td>{{ elemento[10] }}</td>
+                    <td>{{ elemento }}</td>
+                    {% for i in range(10) %}
+
+                        <td>{{ res[elemento][i] }}</td>
+                        
+                    {% endfor %}    
                 </tr>
                 {% endfor %}
             </tbody>

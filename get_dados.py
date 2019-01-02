@@ -1,85 +1,15 @@
 #Versão 2.2.0
 import sqlite3
-import aiohttp as aio
 from bs4 import BeautifulSoup
-import asyncio as asy
-import logging
-import time
 import requests
 import scipy.stats as sct
-import sts_lib as sts
 import re
-
-conn = sqlite3.connect("py_politica.db") # Conexão com o BD;
-cursor = conn.cursor() # Criação de um cursor para realizar operações no BD;
-logging.getLogger('aiohttp.client').setLevel(logging.ERROR) # Mudança no nivel dos avisos do aiohttp;
-tempo_atual = time.localtime() # Data corrente
-
-def main():
-	loop = asy.get_event_loop()
-	get_partidos()
-	loop.run_until_complete(async_materia())
-	# loop.run_until_complete(async_votacao())
-	# parlamentares = cursor.execute('''SELECT id_parlamentar FROM parlamentar''').fetchall()
-	# loop.run_until_complete(async_info(parlamentares, 'filiacoes'))
-	# loop.run_until_complete(async_info(parlamentares, 'mandatos'))
-	# del parlamentares
-	materias = cursor.execute('SELECT id_materia FROM materia').fetchall()
-	loop.run_until_complete(async_assunto(materias))
-	loop.close()
-	delete_suplente()
-	create_ranking_votacao()
-
-# Função auxiliar:
-def get_text_alt(elem, tag, alt=None):
-	try:
-		return elem.find(tag).text
-	except AttributeError:
-		return alt
-
-# Asyncs Principais:
-async def async_materia():
-	async with aio.ClientSession(trust_env = True) as session:
-		materias = [get_materia(ano, session) for ano in range(2010, tempo_atual[0]+1)]
-		materias = await asy.gather(*materias)
-		insert_materias(materias)
-
-async def async_votacao():
-	votacoes = list()
-	connector = aio.TCPConnector(limit=10)
-	timeout = aio.ClientTimeout(total=60*60)
-	async with aio.ClientSession(trust_env=True, timeout=timeout, connector=connector) as session:
-		for ano in range(2010,tempo_atual[0]+1):
-			for mes in range(1,12):
-				data_in ='{}{:02d}02'.format(ano,mes)
-				data_fim = '{}{:02d}01'.format(ano,mes+1)
-				votacoes.append(get_votacao(data_in, data_fim, session))
-		
-		votacoes = await asy.gather(*votacoes)
-		insert_votacao(votacoes)
-
-async def async_info(parlamentares, info):
-	connector = aio.TCPConnector(limit=10)
-	timeout = aio.ClientTimeout(total=60*60)
-	async with aio.ClientSession(trust_env=True, timeout=timeout, connector=connector) as session:
-		res = [get_info_parlamentar(parlamentar[0], info, session) for parlamentar in parlamentares]
-		res = await asy.gather(*res)
-		if info == 'filiacoes':
-			insert_filiacao(res)
-		
-		elif info == 'mandatos':
-			insert_mandatos(res)
-
-async def async_assunto(lista_materia):
-	connector = aio.TCPConnector(limit=10)
-	timeout = aio.ClientTimeout(total=60*60)
-	async with aio.ClientSession(trust_env=True, timeout=timeout, connector=connector) as session:
-		assunto = [get_assunto(materia[0], session) for materia in lista_materia]
-		assunto = await asy.gather(*assunto)
-		insert_assunto(assunto)
+import async_lib as asl
+from utility import get_text_alt, insert
+import votacao as vt
 
 # Função de recolhimento de dados da API e inserção de informações no BD
-def get_partidos():
+def insert_partidos():
 	URL = 'http://legis.senado.leg.br/dadosabertos/senador/partidos'
 	req = requests.get(URL).text
 	partidos = BeautifulSoup(req, 'lxml')
@@ -90,52 +20,8 @@ def get_partidos():
 		data_criacao = partido.find('datacriacao').text
 		info = (id_partido, sigla, nome, data_criacao)
 		
-		try:
-			cursor.execute('''INSERT INTO partido (id_partido, sigla, nome, data_criacao) VALUES (?,?,?,?);''', info)
-		except sqlite3.IntegrityError:
-			pass
-			
-	conn.commit()
+		insert('partido', info)
 	
-# Funções async de recolhimento de dados da API
-async def get_materia(ano, session):
-	URL = 'http://legis.senado.leg.br/dadosabertos/materia/pesquisa/lista?ano={}'
-	async with session.get(URL.format(ano)) as materias:
-		materias = BeautifulSoup(await materias.text(), 'lxml')
-		return materias
-
-async def get_votacao(data_in, data_fim, session):
-	URL = 'http://legis.senado.leg.br/dadosabertos/plenario/lista/votacao/{}/{}'
-	async with session.get(URL.format(data_in, data_fim)) as listas_votacoes:
-		listas_votacoes = BeautifulSoup(await listas_votacoes.text(), 'lxml')
-		return listas_votacoes
-
-async def get_info_parlamentar(parlamentar, info, session):
-	URL = 'http://legis.senado.leg.br/dadosabertos/senador/{}/{}'
-	async with session.get(URL.format(parlamentar, info)) as info:
-		info = BeautifulSoup(await info.text(), 'lxml')
-		return info
-
-async def get_assunto(materia, session):
-	URL = 'http://legis.senado.leg.br/dadosabertos/materia/{}'
-	async with session.get(URL.format(materia)) as assunto:
-		assunto = BeautifulSoup(await assunto.text(), 'lxml')
-		assunto_g = assunto.find('assuntogeral')
-		assunto_e = assunto.find('assuntoespecifico')
-		try:
-			assunto_g = assunto_g.find('descricao').text
-
-		except:
-			assunto_g = None
-
-		try:
-			assunto_e = assunto_e.find('descricao').text
-
-		except:
-			assunto_e = None
-
-		return (materia, assunto_g, assunto_e)
-
 # Funções de Seleção de informações e inserção no BD
 def insert_materias(lista_materias):
 	for materias in lista_materias:
@@ -145,87 +31,73 @@ def insert_materias(lista_materias):
 			numero = materia.find('numeromateria').text
 			data_apresentacao = materia.find('dataapresentacao').text
 			natureza = get_text_alt(materia, 'nomenatureza')
-			index = get_text_alt(materia, 'indexacaomateria')
 			info = (id_materia, tipo, numero, data_apresentacao, natureza)
-			try:
-				cursor.execute('''INSERT INTO materia (id_materia, tipo, numero, data_apresentacao, natureza) VALUES (?,?,?,?,?);''', info)
-			except sqlite3.IntegrityError:
-				pass
+			
+			insert('materia', info, 'id_materia, tipo, numero, data_apresentacao, natureza')
+
+			insert_autor(id_materia, materia)
 
 			try:
-				p = re.compile(r'[^\w, ]')
-				index = p.sub('', index).split(', ')
-				for i in index:
-					try:
-						cursor.execute('''INSERT INTO index_materia (id_materia, indice) VALUES (?,?);''', (id_materia, i))
-					except sqlite3.IntegrityError:
-						pass
-			
+				index = get_text_alt(materia, 'indexacaomateria')
+				insert_index(id_materia, index)
+				
 			except TypeError:
 				pass
-			
-			for autor in materia.find_all('autorprincipal'):
-				nome_autor = get_text_alt(autor, 'nomeautor')
-				tipo_autor = autor.find('siglatipoautor').text
-				parlamentar = get_text_alt(autor, 'codigoparlamentar')
-				info_autor = (tipo_autor, id_materia, nome_autor, parlamentar)
-				try:
-					cursor.execute('''INSERT INTO autoria (tipo_autor, id_materia, autor, id_parlamentar) VALUES (?,?,?,?);''', info_autor)
-				except sqlite3.IntegrityError:
-					pass
 
+		
+def insert_index(id_materia, index):
+	p = re.compile(r'[^\w, ]')
+	index = p.sub('', index).split(', ')
+	for i in index:
+		insert('index_materia', (id_materia, i.strip()))
 
-		conn.commit()
+def insert_autor(id_materia, materia):
+	for autor in materia.find_all('autorprincipal'):
+		nome_autor = get_text_alt(autor, 'nomeautor')
+		tipo_autor = autor.find('siglatipoautor').text
+		parlamentar = get_text_alt(autor, 'codigoparlamentar')
+		autor = (tipo_autor, id_materia, nome_autor, parlamentar)
+		insert('autoria', autor)
+
+def insert_voto(id_votacao, voto):
+		id_parlamentar = voto.find('codigoparlamentar').text
+		descricao = voto.find('voto').text
+		voto = (id_parlamentar, id_votacao, descricao)
+		insert('voto',voto)
+
+def insert_parlamentar(info):
+	id_parlamentar = info.find('codigoparlamentar').text
+	nome = info.find('nomeparlamentar').text
+	info = (id_parlamentar, nome, 'SF')
+	insert('parlamentar', info)
+
+def insert_votacao_secreta(id_votacao, votacao):
+	placar_sim = get_text_alt(votacao, 'totalvotossim')
+	placar_nao = get_text_alt(votacao, 'totalvotosnao')
+	placar_abs = get_text_alt(votacao, 'totalvotosabstencao')
+	info = (id_votacao, placar_sim, placar_nao, placar_abs)
+	insert('votacao_secreta', info)
 
 def insert_votacao(listas_votacoes):
-
 	for votacoes in listas_votacoes:
 		for votacao in votacoes.find_all('votacao'):
 			id_votacao = votacao.find('codigosessaovotacao').text
 			id_materia = get_text_alt(votacao,'codigomateria')
 			resultado = get_text_alt(votacao,'resultado')
-			dataHorainicio = votacao.find('datasessao').text + ' ' + votacao.find("horainicio").text + ":00"
+			dataHorainicio = '{} {}:00'.format(votacao.find('datasessao').text, votacao.find("horainicio").text)
 			info = (id_votacao, id_materia, dataHorainicio, resultado)
-			try:
-				cursor.execute('''INSERT INTO votacao (id_votacao, id_materia, dataHorainicio, resultado) VALUES (?,?,?,?);''', info)
-			except sqlite3.IntegrityError:
-				pass
-
-			try:
-				cursor.execute('''INSERT INTO estatisticas_votacao (id_votacao) VALUES (?);''', (id_votacao,))
-			except sqlite3.IntegrityError:
-				pass
+			insert('votacao', info)
+			insert('estatisticas_votacao', (id_votacao,), 'id_votacao')
+			if votacao.find('secreta').text == 'S':
+				insert_votacao_secreta(id_votacao, votacao)
 
 			for voto in votacao.find_all('votoparlamentar'):
-				id_parlamentar = voto.find('codigoparlamentar').text
-				nome = voto.find('nomeparlamentar').text
-				descricao = voto.find('voto').text
-				info = (id_parlamentar, id_votacao, descricao)
-				try:
-					cursor.execute('''INSERT INTO voto (id_parlamentar, id_votacao, descricao) VALUES (?,?,?);''', info)
-				except sqlite3.IntegrityError:
-					pass
-				
-				try:
-					cursor.execute('''INSERT INTO parlamentar (id_parlamentar, nome, casa) VALUES (?,?,?);''', (id_parlamentar, nome,'SF'))
-				except sqlite3.IntegrityError:
-					pass
-
-			if votacao.find('secreta').text == 'S':
-				placar_sim = get_text_alt(votacao, 'totalvotossim')
-				placar_nao = get_text_alt(votacao, 'totalvotosnao')
-				placar_abs = get_text_alt(votacao, 'totalvotosabstencao')
-				info = (id_votacao, placar_sim, placar_nao, placar_abs)
-				try:
-					cursor.execute('''INSERT INTO votacao_secreta (id_votacao, placarSim, placarNao, placarAbs) VALUES (?,?,?,?);''', info)
-
-				except sqlite3.IntegrityError:
-					pass
-
-			conn.commit()
-
+				insert_voto(id_votacao, voto)
+				insert_parlamentar(voto)
+			
 def insert_filiacao(lista_filiacoes):
 	for filiacoes in lista_filiacoes:
+		# print(filiacoes)
 		parlamentar = filiacoes.find('codigoparlamentar').text
 
 		for filiacao in filiacoes.find_all('filiacao'):
@@ -233,15 +105,8 @@ def insert_filiacao(lista_filiacoes):
 			data_filia = filiacao.find('datafiliacao').text
 			data_desfilia = get_text_alt(filiacao, 'datadesfiliacao')
 			info = (parlamentar, id_partido, data_filia, data_desfilia)
+			insert('filiacao', info)
 		
-			try:
-				cursor.execute('''INSERT INTO filiacao (id_parlamentar, id_partido, data_filiacao, data_desfiliacao) VALUES (?,?,?,?);''', info)
-			
-			except sqlite3.IntegrityError:
-				pass
-		
-	conn.commit()
-
 
 def insert_mandatos(lista_mandatos):
 	for mandatos in lista_mandatos:
@@ -254,26 +119,30 @@ def insert_mandatos(lista_mandatos):
 			uf = mandato.find('ufparlamentar').text
 			info = (parlamentar, id_mandato, participacao, data_in, data_fim, uf)
 		
-			try:
-				cursor.execute('''INSERT INTO mandato (id_parlamentar, id_mandato, descricao, data_inicio, data_fim, uf) VALUES (?,?,?,?,?,?);''', info)
-			
-			except sqlite3.IntegrityError:
-				pass
-
-	conn.commit()
+			insert('mandato', info)
 
 def insert_assunto(list_assuntos):
+	conn = sqlite3.connect("py_politica.db") # Conexão com o BD;
+	cursor = conn.cursor() # Criação de um cursor para realizar operações no BD;
+
 	for assunto in list_assuntos:
 		try:
 			cursor.execute('''
 				UPDATE materia 
 				SET assunto_geral = '{}', assunto_especifico = '{}'
 				WHERE id_materia = '{}' '''.format(assunto[1], assunto[2], assunto[0]))
+
+			conn.commit()
+
 		except sqlite3.IntegrityError:
 			pass
 
+	conn.close()
+
 #Outras Funções de manipulação do BD
 def delete_suplente():
+	conn = sqlite3.connect("py_politica.db") # Conexão com o BD;
+	cursor = conn.cursor() # Criação de um cursor para realizar operações no BD;
 	sql_command = '''
 		DELETE FROM parlamentar
 		WHERE id_parlamentar NOT IN (
@@ -281,10 +150,13 @@ def delete_suplente():
 			FROM mandato
 			WHERE descricao = 'Titular')
 	'''
-
 	cursor.execute(sql_command)
+	conn.commit()
+	conn.close()
 
-def create_ranking_votacao():
+def insert_est_votacao():
+	conn = sqlite3.connect("py_politica.db") # Conexão com o BD;
+	cursor = conn.cursor() # Criação de um cursor para realizar operações no BD;
 	votacao_info = dict()
 	sql_command = '''
 		SELECT id_votacao, descricao, count(*) 
@@ -300,13 +172,13 @@ def create_ranking_votacao():
 	'''	
 	infos = cursor.execute(sql_command).fetchall()
 	for info in infos:
-		if info[0] in votacao_info.keys():
-			votacao_info[info[0]].append((info[1],info[2]))
-		
-		else:
-			votacao_info[info[0]] = [(info[1],info[2])]
+		try:
+			votacao_info.get(info[0]).append(info[1:])
+
+		except AttributeError:
+			votacao_info[info[0]] = [info[1:]]
 	
-	for info in votacao_info.keys():
+	for info in votacao_info:
 		total_sim = 0 
 		total_nao = 0 
 		total_abs = 0 
@@ -316,12 +188,11 @@ def create_ranking_votacao():
 			elif total[0] == 'Não': total_nao = total[1]
 			elif total[0] == 'Abstenção' or total[0] == 'P-NRV': total_abs += total[1]
 
-		eq = [x[1] for x in votacao_info[info]]
-		entropia = [int(i[1]) for i in votacao_info[info]]
-		comp_r = sts.competitividade([total_sim, total_nao], 'r')
-		comp_s = sts.competitividade([total_sim, total_nao], 's')
-		indice_equilibrio = sts.equilibrio(eq)
-		entropia = sct.entropy(entropia)
+		totais = [int(x[1]) for x in votacao_info[info]]
+		comp_r = vt.indice_competitividade([total_sim, total_nao], 'r')
+		comp_s = vt.indice_competitividade([total_sim, total_nao], 's')
+		indice_equilibrio = vt.indice_equilibrio(totais)
+		entropia = sct.entropy(totais)
 
 		sql_command = '''
 			UPDATE estatisticas_votacao
@@ -332,8 +203,11 @@ def create_ranking_votacao():
 		cursor.execute(sql_command.format(total_sim,total_nao,total_abs, indice_equilibrio, comp_r, comp_s, entropia, info))
 	
 	conn.commit()
+	conn.close()
 	
-	votacao_info = {}
+def insert_est_votacao_secreta():
+	conn = sqlite3.connect("py_politica.db") # Conexão com o BD;
+	cursor = conn.cursor() # Criação de um cursor para realizar operações no BD;
 	sql_command = '''
 		SELECT id_votacao, placarSim, placarNao, placarAbs, count (descricao)
 		FROM votacao_secreta NATURAL JOIN voto 
@@ -342,11 +216,9 @@ def create_ranking_votacao():
 	'''
 
 	infos = cursor.execute(sql_command).fetchall()
-	for info in infos:
-		votacao_info[info[0]] = info[1:]
+	votacao_info = {k[0]:k[1:] for k in infos}
 		
-
-	for info in votacao_info.keys():
+	for info in votacao_info:
 		total_sim = votacao_info[info][0]
 		total_nao = votacao_info[info][1]
 		total_abs = votacao_info[info][2] 
@@ -357,10 +229,10 @@ def create_ranking_votacao():
 		total_abs += votacao_info[info][3]
 		
 		totais = [total_sim, total_nao, total_abs] 
-		comp_r = sts.competitividade(totais[:2], 'r')
-		comp_s = sts.competitividade(totais[:2], 's')
+		comp_r = vt.indice_competitividade(totais, 'r')
+		comp_s = vt.indice_competitividade(totais, 's')
+		indice_equilibrio = vt.indice_equilibrio(totais)
 		entropia = sct.entropy(totais)
-		indice_equilibrio = sts.equilibrio(totais)
 
 		sql_command = '''
 			UPDATE estatisticas_votacao
@@ -370,5 +242,4 @@ def create_ranking_votacao():
 		cursor.execute(sql_command.format(total_sim, total_nao, total_abs, indice_equilibrio, comp_r, comp_s, entropia, info))
 
 	conn.commit()
-
-main()
+	conn.close()
